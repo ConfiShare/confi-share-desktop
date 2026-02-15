@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+  padding: 0.17rem;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: 'poppins', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

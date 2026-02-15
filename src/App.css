@@ -1,0 +1,12 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 4rem;
+}
+
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #f9fafb;
+  color: #111827;
+}
