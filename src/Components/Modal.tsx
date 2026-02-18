@@ -37,7 +37,7 @@ export function Modal({
         {showClose && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 cursor-pointer z-10 w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500"
+            className="absolute top-4 right-4 cursor-pointer z-10 w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 bg-gray-100 transition-colors text-gray-500"
           >
             <X className="w-6 h-6" />
           </button>

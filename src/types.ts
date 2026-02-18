@@ -8,6 +8,9 @@ export interface ConfiDocument {
   expiresAt: Date;
   accessCode: string;
   sizeKb?: number;
+  fileObject?: File;       // the actual imported File
+  fileUrl?: string;        // object URL created from fileObject for rendering
+  totalPages?: number;     // total page count extracted from the file
 }
 
 export type ModalType =

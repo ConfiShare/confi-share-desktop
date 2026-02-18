@@ -17,6 +17,9 @@ export function StatusBadge({ status }: StatusBadgeProps) {
 
   return (
     <span
+    style={{
+      padding:"0.1rem 0.3rem"
+    }}
       className={`inline-flex items-center px-6 py-4 rounded text-xs font-light ${bg} ${text}`}
     >
       {getStatusLabel(status)}

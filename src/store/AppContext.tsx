@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { ConfiDocument, ModalState, DocumentStatus } from '../types';
 
+export type ActiveView = 'home' | 'document' | 'settings';
+
 interface AppContextValue {
   documents: ConfiDocument[];
   searchQuery: string;
@@ -12,59 +14,39 @@ interface AppContextValue {
   addDocument: (doc: ConfiDocument) => void;
   removeDocument: (id: string) => void;
   getDocumentById: (id: string) => ConfiDocument | undefined;
+  activeView: ActiveView;
+  activeDocumentId: string | null;
+  navigateTo: (view: ActiveView, docId?: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-function generateCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 32; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
-const MOCK_DOCUMENTS: ConfiDocument[] = [
-  {
-    id: '1',
-    name: 'Financial_Report_Q4.2026.cdc',
-    displayName: 'Q4 Financial Report',
-    status: 'active',
-    expiresAt: new Date('2026-01-12'),
-    accessCode: generateCode(),
-    sizeKb: 243,
-  },
-  {
-    id: '2',
-    name: 'Financial_Report_Q4.2026.cdc',
-    displayName: 'Q4 Financial Report',
-    status: 'offline',
-    expiresAt: new Date('2026-01-12'),
-    accessCode: generateCode(),
-    sizeKb: 243,
-  },
-  {
-    id: '3',
-    name: 'Financial_Report_Q4.2026.cdc',
-    displayName: 'Q4 Financial Report',
-    status: 'revoked',
-    expiresAt: new Date('2026-01-12'),
-    accessCode: generateCode(),
-    sizeKb: 243,
-  },
-];
+// function generateCode(): string {
+//   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+//   let result = '';
+//   for (let i = 0; i < 32; i++) {
+//     result += chars.charAt(Math.floor(Math.random() * chars.length));
+//   }
+//   return result;
+// }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [documents, setDocuments] = useState<ConfiDocument[]>(MOCK_DOCUMENTS);
+  const [documents, setDocuments] = useState<ConfiDocument[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [modal, setModal] = useState<ModalState>({ type: null });
+  const [activeView, setActiveView] = useState<ActiveView>('home');
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
 
   const filteredDocuments = searchQuery.trim()
     ? documents.filter((d) =>
         d.name.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : documents;
+
+  const navigateTo = useCallback((view: ActiveView, docId?: string) => {
+    setActiveView(view);
+    setActiveDocumentId(docId ?? null);
+  }, []);
 
   const openModal = useCallback((state: ModalState) => {
     setModal(state);
@@ -100,6 +82,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addDocument,
         removeDocument,
         getDocumentById,
+        activeView,
+        activeDocumentId,
+        navigateTo,
       }}
     >
       {children}

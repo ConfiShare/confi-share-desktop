@@ -4,28 +4,34 @@ import { Modal } from "./Modal";
 import { useApp } from "../store/AppContext";
 
 export function EnterAccessCodeModal() {
-  const { closeModal, modal, getDocumentById } = useApp();
-  const [code, setCode] = useState("");
-  const [error, setError] = useState("");
+ const { closeModal, modal, getDocumentById, navigateTo } = useApp();
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
 
-  const document = modal.documentId ? getDocumentById(modal.documentId) : null;
-  const docName = document?.displayName ?? "Document";
+  const doc = modal.documentId ? getDocumentById(modal.documentId) : null;
+  const docName = doc?.displayName ?? 'Document';
 
   function handleVerify() {
     if (!code.trim()) {
-      setError("Please enter an access code");
+      setError('Please enter an access code');
       return;
     }
-    if (document && code.trim() !== document.accessCode) {
-      setError("Invalid access code. Please try again.");
+    if (!doc) {
+      setError('Document not found');
       return;
     }
-    // Success - in real app would decrypt & show document
-    setError("");
-    alert(
-      "Document verified! (In production this would decrypt and render the document)",
-    );
+    if (code.trim() !== doc.accessCode) {
+      setError('Invalid access code. Please try again.');
+      return;
+    }
+    // ✅ Correct code — close modal and navigate to viewer
+    setError('');
     closeModal();
+    navigateTo('document', doc.id);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') handleVerify();
   }
 
   return (
@@ -36,8 +42,8 @@ export function EnterAccessCodeModal() {
           Enter Access Code
         </h2>
 
-        Divider
-        <div className="h-px bg-gray-100 mb-5" />
+      
+        <hr className="text-gray-300 mb-5" />
 
         {/* Document label */}
         <div className="mb-5">
@@ -47,8 +53,6 @@ export function EnterAccessCodeModal() {
           <p className="text-sm font-semibold text-gray-900">{docName}</p>
         </div>
 
-        {/* Divider */}
-        {/* <div className="h-px bg-gray-100 mb-5" /> */}
 
         {/* Code input */}
         <input
@@ -59,7 +63,9 @@ export function EnterAccessCodeModal() {
             setCode(e.target.value);
             setError("");
           }}
-          className={`w-full text-sm text-gray-700 placeholder-gray-400 outline-none border pb-3 mb-4 transition-colors ${
+          onKeyDown={handleKeyDown}
+          style={{padding:"1rem"}}
+          className={`w-full text-sm text-gray-700 rounded-xl size-12 placeholder-gray-400 outline-none border pb-3 mb-4 transition-colors ${
             error ? "border-red-400" : "border-gray-200 focus:border-green-500"
           }`}
         />
@@ -69,7 +75,7 @@ export function EnterAccessCodeModal() {
 
         {/* Info box */}
         <div className="flex items-start gap-3 bg-gray-50 rounded-xl px-4 py-3.5 mb-6">
-          <ShieldCheck className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+          <ShieldCheck className="w-8 h-8 text-gray-400 shrink-0 mt-0.5" />
           <p className="text-xs text-gray-500 leading-relaxed">
             Enter the access code to view this document.
             <br />

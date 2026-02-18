@@ -1,8 +1,8 @@
-import { Plus } from "lucide-react";
-import { useApp } from "../store/AppContext";
+// import { Plus } from "lucide-react";
+// import { useApp } from "../store/AppContext";
 
 export function MainContent() {
-  const { openModal } = useApp();
+  // const { openModal } = useApp();
 
   return (
     <main className="flex-1 flex flex-col items-center justify-center bg-gray-50 h-full">
@@ -33,20 +33,18 @@ export function MainContent() {
         </svg>
       </div>
 
-      <h2 className="text-xl font-bold text-gray-900 mb-2">No documents yet</h2>
+      <h2 className="text-xl font-bold text-gray-900 mb-2">Select a Document</h2>
       <p className="text-sm text-gray-400 text-center max-w-xs mb-7 leading-relaxed">
-        Import a secure document to get started.
-        <br />
-        Your files stay protected, and access is always in your control.
+        Choose a document from the sidebar to view its contents.
       </p>
 
-      <button
+      {/* <button
         onClick={() => openModal({ type: "import_choose" })}
         className="flex items-center gap-2 px-8 py-3.5 size-14 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors shadow-sm"
       >
         <Plus className="w-6 h-6" />
         Import document
-      </button>
+      </button> */}
     </main>
   );
 }

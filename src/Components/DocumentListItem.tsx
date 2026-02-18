@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from "react";
-import { FileText, MoreVertical, Key, Eye } from "lucide-react";
-import type { ConfiDocument } from "../types";
-import { StatusBadge } from "./StatusBadge";
-import { formatExpiry, useApp } from "../store/AppContext";
+import { useState, useRef, useEffect } from 'react';
+import { FileText, MoreVertical, Key, Eye } from 'lucide-react';
+import type { ConfiDocument } from '../types';
+import { StatusBadge } from './StatusBadge';
+import { formatExpiry, useApp } from '../store/AppContext';
 
 interface DocumentListItemProps {
   doc: ConfiDocument;
@@ -26,10 +26,10 @@ export function DocumentListItem({
       }
     }
     if (menuOpen) {
-      window.document.addEventListener("mousedown", handleClickOutside);
+      window.document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
-      window.document.removeEventListener("mousedown", handleClickOutside);
+      window.document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [menuOpen]);
 
@@ -41,16 +41,17 @@ export function DocumentListItem({
   function handleCopyAccessCode(e: React.MouseEvent) {
     e.stopPropagation();
     setMenuOpen(false);
-    openModal({ type: "view_access_code", documentId: doc.id });
+    openModal({ type: 'view_access_code', documentId: doc.id });
   }
 
   function handleViewDocument(e: React.MouseEvent) {
     e.stopPropagation();
     setMenuOpen(false);
-    if (doc.status === "revoked") {
-      openModal({ type: "access_revoked", documentId: doc.id });
+    if (doc.status === 'revoked') {
+      openModal({ type: 'access_revoked', documentId: doc.id });
     } else {
-      openModal({ type: "enter_access_code", documentId: doc.id });
+      // Always require access code first — no bypass
+      openModal({ type: 'enter_access_code', documentId: doc.id });
     }
   }
 
@@ -58,11 +59,11 @@ export function DocumentListItem({
     <div
       onClick={onSelect}
       className={`relative flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-colors group ${
-        isSelected ? "bg-gray-100" : "hover:bg-gray-50"
+        isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'
       }`}
     >
       {/* File icon */}
-      <div className="shrink-0 w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center">
+      <div className="shrink-0 w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center">
         <FileText className="w-6 h-6 text-gray-500" />
       </div>
 
@@ -71,9 +72,7 @@ export function DocumentListItem({
         <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
         <div className="flex items-center gap-2 mt-0.5">
           <StatusBadge status={doc.status} />
-          <span className="text-xs text-gray-400">
-            {formatExpiry(doc.expiresAt)}
-          </span>
+          <span className="text-[11px] text-gray-400">{formatExpiry(doc.expiresAt)}</span>
         </div>
       </div>
 
@@ -81,30 +80,26 @@ export function DocumentListItem({
       <div className="relative" ref={menuRef}>
         <button
           onClick={handleMenuClick}
-          className="w-7 h-7 flex items-center cursor-pointer justify-center rounded-lg group-hover:opacity-100 transition-opacity hover:bg-gray-200"
+          className="w-8 h-8 flex items-center justify-center rounded-lg group-hover:opacity-100 transition-opacity hover:bg-gray-200"
         >
           <MoreVertical className="w-6 h-6 text-gray-500" />
         </button>
 
         {/* Dropdown menu */}
         {menuOpen && (
-          <div 
-          style={{
-            padding:"0.5rem", 
-          }}
-          className="absolute flex flex-col gap-3 right-0 top-8 z-50 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-6">
+          <div className="absolute right-0 top-9 z-50 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1">
             <button
               onClick={handleCopyAccessCode}
               className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              <Key className="w-5 h-5 text-gray-500" />
+              <Key className="w-4 h-4 text-gray-500" />
               Copy access code
             </button>
             <button
               onClick={handleViewDocument}
               className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              <Eye className="w-5 h-5 text-gray-500" />
+              <Eye className="w-4 h-4 text-gray-500" />
               View Document
             </button>
           </div>
