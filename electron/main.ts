@@ -1,78 +1,92 @@
-// import { app, BrowserWindow } from 'electron'
-// import { createRequire } from 'node:module'
-// import { fileURLToPath } from 'node:url'
-// import path from 'node:path'
-
-// const require = createRequire(import.meta.url)
-// const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-// // The built directory structure
-// //
-// // ├─┬─┬ dist
-// // │ │ └── index.html
-// // │ │
-// // │ ├─┬ dist-electron
-// // │ │ ├── main.js
-// // │ │ └── preload.mjs
-// // │
-// process.env.APP_ROOT = path.join(__dirname, '..')
-
-// // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
-// export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-// export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
-// export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
-
-// process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
-
-// let win: BrowserWindow | null
-
-// function createWindow() {
-//   win = new BrowserWindow({
-//     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
-//     webPreferences: {
-//       preload: path.join(__dirname, 'preload.mjs'),
-//     },
-//   })
-
-//   // Test active push message to Renderer-process.
-//   win.webContents.on('did-finish-load', () => {
-//     win?.webContents.send('main-process-message', (new Date).toLocaleString())
-//   })
-
-//   if (VITE_DEV_SERVER_URL) {
-//     win.loadURL(VITE_DEV_SERVER_URL)
-//   } else {
-//     // win.loadFile('dist/index.html')
-//     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
-//   }
-// }
-
-// // Quit when all windows are closed, except on macOS. There, it's common
-// // for applications and their menu bar to stay active until the user quits
-// // explicitly with Cmd + Q.
-// app.on('window-all-closed', () => {
-//   if (process.platform !== 'darwin') {
-//     app.quit()
-//     win = null
-//   }
-// })
-
-// app.on('activate', () => {
-//   // On OS X it's common to re-create a window in the app when the
-//   // dock icon is clicked and there are no other windows open.
-//   if (BrowserWindow.getAllWindows().length === 0) {
-//     createWindow()
-//   }
-// })
-
-// app.whenReady().then(createWindow)
-
-
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, safeStorage } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import fs from 'node:fs'
+import { decryptCDCContainer, decryptPayloadWithKey } from './crypto.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// --- DRM IPC Handlers ---
+
+const SECURE_DATA_PATH = path.join(app.getPath('userData'), 'secure_metadata.json');
+
+function readSecureMetadata() {
+  if (!fs.existsSync(SECURE_DATA_PATH)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(SECURE_DATA_PATH, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+function writeSecureMetadata(data: any) {
+  fs.writeFileSync(SECURE_DATA_PATH, JSON.stringify(data, null, 2));
+}
+
+// Handler to decrypt the CDC container using passKey
+ipcMain.handle('drm:decrypt-cdc', async (_event, container, passKey) => {
+  try {
+    return await decryptCDCContainer(container, passKey);
+  } catch (error: any) {
+    console.error('Decryption failed:', error);
+    throw new Error(`Decryption failed: ${error.message}`);
+  }
+});
+
+// Handler to decrypt payload using already unwrapped contentKey
+ipcMain.handle('drm:decrypt-payload', async (_event, container, contentKey) => {
+  try {
+    return await decryptPayloadWithKey(container, contentKey);
+  } catch (error: any) {
+    console.error('Payload decryption failed:', error);
+    throw new Error(`Payload decryption failed: ${error.message}`);
+  }
+});
+
+// Secure storage handlers using Electron's safeStorage
+ipcMain.handle('secure:set-data', async (_event, docId, key, value) => {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('Safe storage is not available on this system');
+  }
+
+  const encrypted = safeStorage.encryptString(value);
+  const metadata = readSecureMetadata();
+  
+  if (!metadata[docId]) metadata[docId] = {};
+  metadata[docId][key] = encrypted.toString('base64');
+  
+  writeSecureMetadata(metadata);
+  return true;
+});
+
+ipcMain.handle('secure:get-data', async (_event, docId, key) => {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('Safe storage is not available on this system');
+  }
+
+  const metadata = readSecureMetadata();
+  const encryptedBase64 = metadata[docId]?.[key];
+  
+  if (!encryptedBase64) return null;
+  
+  try {
+    const decrypted = safeStorage.decryptString(Buffer.from(encryptedBase64, 'base64'));
+    return decrypted;
+  } catch (error) {
+    console.error(`Failed to decrypt ${key} for ${docId}:`, error);
+    return null;
+  }
+});
+
+ipcMain.handle('secure:remove-doc-data', async (_event, docId) => {
+  const metadata = readSecureMetadata();
+  if (metadata[docId]) {
+    delete metadata[docId];
+    writeSecureMetadata(metadata);
+    return true;
+  }
+  return false;
+});
 
 // The built directory structure
 //

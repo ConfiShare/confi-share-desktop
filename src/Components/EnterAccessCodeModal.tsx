@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Loader2 } from "lucide-react";
 import { Modal } from "./Modal";
 import { useApp } from "../store/AppContext";
 
 export function EnterAccessCodeModal() {
- const { closeModal, modal, getDocumentById, navigateTo } = useApp();
+  const { closeModal, modal, getDocumentById, navigateTo, unlockDocument } = useApp();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const doc = modal.documentId ? getDocumentById(modal.documentId) : null;
   const docName = doc?.displayName ?? 'Document';
 
-  function handleVerify() {
+  async function handleVerify() {
     if (!code.trim()) {
       setError('Please enter an access code');
       return;
@@ -20,14 +21,29 @@ export function EnterAccessCodeModal() {
       setError('Document not found');
       return;
     }
-    if (code.trim() !== doc.accessCode) {
-      setError('Invalid access code. Please try again.');
-      return;
-    }
-    // ✅ Correct code — close modal and navigate to viewer
+
+    setIsVerifying(true);
     setError('');
-    closeModal();
-    navigateTo('document', doc.id);
+
+    try {
+      if (doc.isLocked && doc.cdcContainer) {
+        // DRM flow: Activate and Decrypt
+        await unlockDocument(doc.id, code.trim());
+      } else {
+        // Legacy flow: Simple code match
+        if (code.trim() !== doc.accessCode) {
+          throw new Error('Invalid access code. Please try again.');
+        }
+      }
+
+      // ✅ Success
+      closeModal();
+      navigateTo('document', doc.id);
+    } catch (err: any) {
+      setError(err.message || 'Verification failed. Please check your code.');
+    } finally {
+      setIsVerifying(false);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -83,12 +99,19 @@ export function EnterAccessCodeModal() {
           </p>
         </div>
 
-        {/* CTA */}
         <button
           onClick={handleVerify}
-          className="w-full py-3.5 size-14 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors"
+          disabled={isVerifying}
+          className="w-full flex items-center justify-center gap-2 py-3.5 size-14 bg-green-600 hover:bg-green-700 active:bg-green-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
         >
-          Verify &amp; View Document
+          {isVerifying ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Verifying...
+            </>
+          ) : (
+            'Verify & View Document'
+          )}
         </button>
       </div>
     </Modal>

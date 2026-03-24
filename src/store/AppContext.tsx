@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { ConfiDocument, ModalState, DocumentStatus } from '../types';
+import { drmService } from '../services/drmService';
 
 export type ActiveView = 'home' | 'document' | 'settings';
 
@@ -17,6 +18,7 @@ interface AppContextValue {
   activeView: ActiveView;
   activeDocumentId: string | null;
   navigateTo: (view: ActiveView, docId?: string) => void;
+  unlockDocument: (docId: string, passKey: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -69,6 +71,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [documents]
   );
 
+  const unlockDocument = useCallback(async (docId: string, passKey: string) => {
+    const doc = getDocumentById(docId);
+    if (!doc || !doc.cdcContainer) throw new Error('Document not found or not a protected file');
+
+    try {
+      const { decryptedData, realDocId } = await drmService.unlockDocument(docId, doc.cdcContainer, passKey);
+      
+      // decryptedData.file is base64
+      const byteCharacters = atob(decryptedData.file);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: doc.cdcContainer.meta.mime });
+      const fileUrl = URL.createObjectURL(blob);
+
+      setDocuments(prev => prev.map(d => 
+        d.id === docId ? { ...d, fileUrl, realDocId, isLocked: false } : d
+      ));
+    } catch (error) {
+      console.error('Failed to unlock document:', error);
+      throw error;
+    }
+  }, [getDocumentById]);
+
   return (
     <AppContext.Provider
       value={{
@@ -85,6 +113,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         activeView,
         activeDocumentId,
         navigateTo,
+        unlockDocument,
       }}
     >
       {children}
