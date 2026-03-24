@@ -8,6 +8,10 @@ declare global {
       setSecureData: (docId: string, key: string, value: string) => Promise<boolean>;
       getSecureData: (docId: string, key: string) => Promise<string | null>;
       removeDocData: (docId: string) => Promise<boolean>;
+      saveList: (documents: any[]) => Promise<boolean>;
+      loadList: () => Promise<any[]>;
+      saveFileLocally: (docId: string, fileName: string, arrayBuffer: ArrayBuffer) => Promise<string>;
+      readLocalFile: (localPath: string) => Promise<Uint8Array>;
     };
     ipcRenderer: {
       invoke: (channel: string, ...args: any[]) => Promise<any>;

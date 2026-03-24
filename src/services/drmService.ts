@@ -31,72 +31,55 @@ export const drmService = {
 
   /**
    * Attempts to unlock a document. 
-   * First checks for a cached contentKey and valid token.
-   * If not found, requires activation with passKey.
+   * Follows the refined flow: always prompt for passKey, 
+   * skip backend activation if a valid offline token exists.
    */
-  async unlockDocument(docId: string, container: any, passKey?: string): Promise<{ decryptedData: any; realDocId: string }> {
+  async unlockDocument(docId: string, container: any, passKey: string): Promise<{ decryptedData: any; realDocId: string; offlineExpiresAt?: string }> {
     if (!window.drmApi) {
       console.error('window.drmApi is undefined. Preload script may have failed to load.');
       throw new Error('Internal Error: DRM interface not available. Please restart the application.');
     }
 
-    // 1. Try to find the realDocId if we've unlocked this before in this session
-    // Check if we have a cached realDocId for this local docId
-    const cachedRealDocId = await window.drmApi.getSecureData(docId, 'realDocId');
-    const effectiveRealDocId = cachedRealDocId || docId;
-
-    // 2. Check if we already have a valid offline token and content key
-    const expiresAtStr = await window.drmApi.getSecureData(effectiveRealDocId, 'offlineExpiresAt');
-    const now = new Date();
-    const isTokenValid = expiresAtStr && new Date(expiresAtStr) > now;
-
-    if (isTokenValid) {
-       const cachedContentKey = await window.drmApi.getSecureData(effectiveRealDocId, 'contentKey');
-       if (cachedContentKey) {
-         try {
-           const decryptedJson = await window.drmApi.decryptPayload(container, cachedContentKey);
-           const decryptedData = JSON.parse(decryptedJson);
-           const rId = decryptedData.docId || decryptedData.id;
-           return { decryptedData, realDocId: rId };
-         } catch (e) {
-           console.error("Cached content key decryption failed", e);
-         }
-       }
-    }
-
-    // 3. If no valid token or decryption failed, we need the passKey
-    if (!passKey) {
-      throw new Error('Access code required');
-    }
-
-    // 4. Decrypt container with passKey to recover realDocId AND contentKey
+    // 1. Decrypt container with passKey to recover realDocId AND contentKey
+    // This also serves as validation of the passKey
     const { decryptedPayload, contentKey } = await window.drmApi.decryptCDC(container, passKey);
-    console.log('Decrypted Payload:', decryptedPayload);
+    console.log('Decrypted Payload recovered');
     
     const decryptedData = JSON.parse(decryptedPayload);
     const realDocId = decryptedData.docId || decryptedData.id;
 
     if (!realDocId) {
-       console.error('Full Decrypted Data Object:', decryptedData);
        throw new Error("Invalid document: docId missing from payload");
     }
 
-    // 5. Activate with backend using the REAL docId
-    const activation = await this.activate(realDocId, passKey);
-    console.log('Activation Response Data:', activation);
+    // 2. Check if we already have a valid offline token and content key for this realDocId
+    const expiresAtStr = await window.drmApi.getSecureData(realDocId, 'offlineExpiresAt');
+    const now = new Date();
+    const isTokenValid = expiresAtStr && new Date(expiresAtStr) > now;
 
-    // 6. Store activation data and contentKey securely, indexed by realDocId
-    // Ensure all arguments to setSecureData are defined and non-null
+    if (isTokenValid) {
+       console.log('Token is still valid, skipping backend activation.');
+       // We've already decrypted the payload, so we're good to go
+       return { decryptedData, realDocId, offlineExpiresAt: expiresAtStr };
+    }
+
+    // 3. Token missing or expired: Activate with backend using the REAL docId
+    console.log('Token invalid or missing, activating with backend...');
+    const activation = await this.activate(realDocId, passKey);
+    console.log('Activation Successful:', activation);
+
+    // 4. Store activation data, contentKey, and passKey securely
     if (activation.offlineToken && activation.offlineExpiresAt) {
       await window.drmApi.setSecureData(realDocId, 'offlineToken', activation.offlineToken);
       await window.drmApi.setSecureData(realDocId, 'offlineExpiresAt', activation.offlineExpiresAt);
       await window.drmApi.setSecureData(realDocId, 'contentKey', contentKey);
+      await window.drmApi.setSecureData(realDocId, 'passKey', passKey);
       
-      // Also store a mapping from local docId to realDocId so we can find it next time
+      // Map local id to real id
       await window.drmApi.setSecureData(docId, 'realDocId', realDocId);
     }
 
-    return { decryptedData, realDocId };
+    return { decryptedData, realDocId, offlineExpiresAt: activation.offlineExpiresAt };
   },
 
   /**

@@ -66,6 +66,11 @@ async function decryptPayloadWithKey(container, contentKeyBase64) {
 }
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 const SECURE_DATA_PATH = path.join(app.getPath("userData"), "secure_metadata.json");
+const DOCUMENTS_LIST_PATH = path.join(app.getPath("userData"), "documents.json");
+const STORED_DOCS_DIR = path.join(app.getPath("userData"), "stored_docs");
+if (!fs.existsSync(STORED_DOCS_DIR)) {
+  fs.mkdirSync(STORED_DOCS_DIR, { recursive: true });
+}
 function readSecureMetadata() {
   if (!fs.existsSync(SECURE_DATA_PATH)) return {};
   try {
@@ -77,6 +82,45 @@ function readSecureMetadata() {
 function writeSecureMetadata(data) {
   fs.writeFileSync(SECURE_DATA_PATH, JSON.stringify(data, null, 2));
 }
+ipcMain.handle("docs:save-list", async (_event, documents) => {
+  try {
+    fs.writeFileSync(DOCUMENTS_LIST_PATH, JSON.stringify(documents, null, 2));
+    return true;
+  } catch (error) {
+    console.error("Failed to save document list:", error);
+    return false;
+  }
+});
+ipcMain.handle("docs:load-list", async () => {
+  try {
+    if (!fs.existsSync(DOCUMENTS_LIST_PATH)) return [];
+    const data = fs.readFileSync(DOCUMENTS_LIST_PATH, "utf-8");
+    return JSON.parse(data);
+  } catch (error) {
+    console.error("Failed to load document list:", error);
+    return [];
+  }
+});
+ipcMain.handle("docs:save-file-locally", async (_event, docId, fileName, arrayBuffer) => {
+  try {
+    const fileExt = path.extname(fileName);
+    const localPath = path.join(STORED_DOCS_DIR, `${docId}${fileExt}`);
+    fs.writeFileSync(localPath, Buffer.from(arrayBuffer));
+    return localPath;
+  } catch (error) {
+    console.error("Failed to save file locally:", error);
+    throw error;
+  }
+});
+ipcMain.handle("docs:read-local-file", async (_event, localPath) => {
+  try {
+    if (!fs.existsSync(localPath)) throw new Error("File not found");
+    return fs.readFileSync(localPath);
+  } catch (error) {
+    console.error("Failed to read local file:", error);
+    throw error;
+  }
+});
 ipcMain.handle("drm:decrypt-cdc", async (_event, container, passKey) => {
   try {
     return await decryptCDCContainer(container, passKey);

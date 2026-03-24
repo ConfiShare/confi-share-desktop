@@ -54,4 +54,9 @@ contextBridge.exposeInMainWorld('drmApi', {
   setSecureData: (docId: string, key: string, value: string) => ipcRenderer.invoke('secure:set-data', docId, key, value),
   getSecureData: (docId: string, key: string) => ipcRenderer.invoke('secure:get-data', docId, key),
   removeDocData: (docId: string) => ipcRenderer.invoke('secure:remove-doc-data', docId),
+  // File & List Persistence
+  saveList: (documents: any[]) => ipcRenderer.invoke('docs:save-list', documents),
+  loadList: () => ipcRenderer.invoke('docs:load-list'),
+  saveFileLocally: (docId: string, fileName: string, arrayBuffer: ArrayBuffer) => ipcRenderer.invoke('docs:save-file-locally', docId, fileName, arrayBuffer),
+  readLocalFile: (localPath: string) => ipcRenderer.invoke('docs:read-local-file', localPath),
 })
