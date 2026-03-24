@@ -77,7 +77,9 @@ export function DocumentListItem({
         <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
         <div className="flex items-center gap-2 mt-0.5">
           <StatusBadge status={doc.status} />
-          <span className="text-[11px] text-gray-400">{formatExpiry(doc.expiresAt)}</span>
+          {doc.realDocId && (
+            <span className="text-[11px] text-gray-400">{formatExpiry(doc.expiresAt)}</span>
+          )}
         </div>
       </div>
 
@@ -92,14 +94,16 @@ export function DocumentListItem({
 
         {/* Dropdown menu */}
         {menuOpen && (
-          <div className="absolute right-0 top-9 z-50 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1">
-            <button
-              onClick={handleCopyAccessCode}
-              className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <Key className="w-4 h-4 text-gray-500" />
-              Copy access code
-            </button>
+          <div className="absolute right-0 top-9 z-50 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 overflow-hidden">
+            {doc.accessCode && (
+              <button
+                onClick={handleCopyAccessCode}
+                className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <Key className="w-4 h-4 text-gray-500" />
+                Copy access code
+              </button>
+            )}
             <button
               onClick={handleViewDocument}
               className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"

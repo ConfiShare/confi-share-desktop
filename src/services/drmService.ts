@@ -40,10 +40,17 @@ export const drmService = {
       throw new Error('Internal Error: DRM interface not available. Please restart the application.');
     }
 
-    // 1. Decrypt container with passKey to recover realDocId AND contentKey
+    // 1. Decipher container with passKey to recover realDocId AND contentKey
     // This also serves as validation of the passKey
-    const { decryptedPayload, contentKey } = await window.drmApi.decryptCDC(container, passKey);
-    console.log('Decrypted Payload recovered');
+    let decryptedPayload, contentKey;
+    try {
+      const result = await window.drmApi.decryptCDC(container, passKey);
+      decryptedPayload = result.decryptedPayload;
+      contentKey = result.contentKey;
+    } catch (e) {
+      console.error('Decryption failed during unlock:', e);
+      throw new Error("Invalid access code. Please check and try again.");
+    }
     
     const decryptedData = JSON.parse(decryptedPayload);
     const realDocId = decryptedData.docId || decryptedData.id;
