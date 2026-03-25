@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import type { ConfiDocument, ModalState, DocumentStatus } from '../types';
+import { drmService } from '../services/drmService';
 
 export type ActiveView = 'home' | 'document' | 'settings';
 
@@ -11,24 +12,16 @@ interface AppContextValue {
   modal: ModalState;
   openModal: (state: ModalState) => void;
   closeModal: () => void;
-  addDocument: (doc: ConfiDocument) => void;
-  removeDocument: (id: string) => void;
+  addDocument: (doc: ConfiDocument) => Promise<void>;
+  removeDocument: (id: string) => Promise<void>;
   getDocumentById: (id: string) => ConfiDocument | undefined;
   activeView: ActiveView;
   activeDocumentId: string | null;
   navigateTo: (view: ActiveView, docId?: string) => void;
+  unlockDocument: (docId: string, passKey: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
-
-// function generateCode(): string {
-//   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-//   let result = '';
-//   for (let i = 0; i < 32; i++) {
-//     result += chars.charAt(Math.floor(Math.random() * chars.length));
-//   }
-//   return result;
-// }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [documents, setDocuments] = useState<ConfiDocument[]>([]);
@@ -36,6 +29,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [modal, setModal] = useState<ModalState>({ type: null });
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
+
+  const isInitialized = useRef(false);
+
+  // Load documents from disk on mount
+  useEffect(() => {
+    if (isInitialized.current) return;
+    isInitialized.current = true;
+
+    async function loadDocs() {
+      if (window.drmApi) {
+        const storedDocs = await window.drmApi.loadList();
+        // Reset transient fields
+        const hydrated = storedDocs.map((d: any) => ({
+          ...d,
+          fileObject: undefined,
+          fileUrl: undefined,
+          isLocked: true, // Always start locked as per user request
+          expiresAt: d.expiresAt ? new Date(d.expiresAt) : new Date(),
+        }));
+        setDocuments(hydrated);
+      }
+    }
+    loadDocs();
+  }, []);
+
+  // Save documents to disk whenever they change
+  useEffect(() => {
+    if (window.drmApi && documents.length > 0) {
+      // We don't save fileUrl or fileObject to the json
+      const toSave = documents.map(({ fileUrl, fileObject, ...rest }) => rest);
+      window.drmApi.saveList(toSave);
+    }
+  }, [documents]);
 
   const filteredDocuments = searchQuery.trim()
     ? documents.filter((d) =>
@@ -56,18 +82,72 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setModal({ type: null });
   }, []);
 
-  const addDocument = useCallback((doc: ConfiDocument) => {
-    setDocuments((prev) => [...prev, doc]);
+  const addDocument = useCallback(async (doc: ConfiDocument) => {
+    let finalDoc = { ...doc };
+    
+    // If it has a fileObject, save it locally
+    if (doc.fileObject && window.drmApi) {
+      try {
+        const buffer = await doc.fileObject.arrayBuffer();
+        const localPath = await window.drmApi.saveFileLocally(doc.id, doc.name, buffer);
+        finalDoc.localPath = localPath;
+      } catch (e) {
+        console.error('Failed to save file locally:', e);
+      }
+    }
+
+    setDocuments((prev) => {
+      const newList = [...prev, finalDoc];
+      return newList;
+    });
   }, []);
 
-  const removeDocument = useCallback((id: string) => {
-    setDocuments((prev) => prev.filter((d) => d.id !== id));
+  const removeDocument = useCallback(async (id: string) => {
+    setDocuments((prev) => {
+      const newList = prev.filter((d) => d.id !== id);
+      if (window.drmApi) window.drmApi.saveList(newList.map(({ fileUrl, fileObject, ...rest }) => rest));
+      return newList;
+    });
+    // Optional: Remove local file from disk too via IPC
   }, []);
 
   const getDocumentById = useCallback(
     (id: string) => documents.find((d) => d.id === id),
     [documents]
   );
+
+  const unlockDocument = useCallback(async (docId: string, passKey: string) => {
+    const doc = getDocumentById(docId);
+    if (!doc || !doc.cdcContainer) throw new Error('Document not found or not a protected file');
+
+    try {
+      const { decryptedData, realDocId, offlineExpiresAt } = await drmService.unlockDocument(docId, doc.cdcContainer, passKey);
+      
+      // decryptedData.file is base64
+      const byteCharacters = atob(decryptedData.file);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: doc.cdcContainer.meta.mime });
+      const fileUrl = URL.createObjectURL(blob);
+
+      setDocuments(prev => prev.map(d => 
+        d.id === docId ? { 
+          ...d, 
+          fileUrl, 
+          realDocId, 
+          isLocked: false,
+          accessCode: passKey, // Store the access code for "View Access Code" section
+          expiresAt: offlineExpiresAt ? new Date(offlineExpiresAt) : d.expiresAt
+        } : d
+      ));
+    } catch (error) {
+      console.error('Failed to unlock document:', error);
+      throw error;
+    }
+  }, [getDocumentById]);
 
   return (
     <AppContext.Provider
@@ -85,6 +165,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         activeView,
         activeDocumentId,
         navigateTo,
+        unlockDocument,
       }}
     >
       {children}

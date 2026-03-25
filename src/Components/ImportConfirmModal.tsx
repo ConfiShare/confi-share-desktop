@@ -51,33 +51,49 @@ export function ImportConfirmModal() {
     setLoading(true);
 
     try {
+      const isCdc = file.name.toLowerCase().endsWith('.cdc');
+      
+      let cdcContainer: any = null;
+      let displaySize = Math.round(file.size / 1024) + ' kb';
+      let totalPages: number | undefined;
+      let fileUrl = '';
+
+      if (isCdc) {
+        // Read .cdc file as text and parse JSON
+        const text = await file.text();
+        cdcContainer = JSON.parse(text);
+        // Container might have different metadata
+      } else {
+        // Regular file logic
+        fileUrl = URL.createObjectURL(file);
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          totalPages = await getPdfPageCount(file);
+        }
+      }
+
       const expiry = new Date();
       expiry.setMonth(expiry.getMonth() + 3);
-
-      // Create object URL for rendering
-      const fileUrl = URL.createObjectURL(file);
-
-      // Extract page count for PDFs
-      let totalPages: number | undefined;
-      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        totalPages = await getPdfPageCount(file);
-      }
 
       const newDoc: ConfiDocument = {
         id: generateId(),
         name: file.name,
         displayName: file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' '),
-        status: 'active',
+        status: isCdc ? 'active' : 'active', // can be adjusted based on container meta
         expiresAt: expiry,
         accessCode: generateCode(),
-        sizeKb: fileSizeKb,
+        sizeKb: Math.round(file.size / 1024),
         fileObject: file,
         fileUrl,
         totalPages,
+        cdcContainer,
+        isLocked: isCdc,
       };
 
       addDocument(newDoc);
       openModal({ type: 'import_success' });
+    } catch (error) {
+      console.error('Failed to import document:', error);
+      alert('Failed to import document. Please check if the file is a valid .cdc container.');
     } finally {
       setLoading(false);
     }
