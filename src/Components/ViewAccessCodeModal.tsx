@@ -31,7 +31,7 @@ export function ViewAccessCodeModal() {
         </h2>
 
         {/* Divider */}
-        <div className="bg-gray-100" ></div>
+        {/* <div className="bg-gray-100" ></div> */}
 
         {/* Document label */}
         <div className="mb-5">
@@ -78,7 +78,7 @@ export function ViewAccessCodeModal() {
         {/* Copy button */}
         <button
           onClick={handleCopy}
-          className="w-full flex items-center justify-center gap-2 py-3.5 size-14 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3.5 size-14 bg-[#059669] hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors"
         >
           <Copy className="w-4 h-4" />
           {copied ? "Copied!" : "Copy code"}

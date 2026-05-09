@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import type { ConfiDocument } from '../types';
@@ -7,19 +7,34 @@ interface DocumentViewerProps {
   doc: ConfiDocument;
 }
 
+const MIN_ZOOM = 50;
+const MAX_ZOOM = 200;
+const ZOOM_STEP = 25;
+
 export function DocumentViewer({ doc }: DocumentViewerProps) {
   const [zoom, setZoom] = useState(100);
   const [page, setPage] = useState(1);
 
-  const totalPages = doc.totalPages ?? 1;
-  const isPdf = doc.name.toLowerCase().endsWith('.pdf') || doc.fileObject?.type === 'application/pdf';
+  const totalPages = Math.max(1, doc.totalPages ?? 1);
+  const mimeType = doc.fileObject?.type ?? doc.cdcContainer?.meta.mime ?? '';
+  const isPdf = doc.name.toLowerCase().endsWith('.pdf') || mimeType === 'application/pdf';
+  const zoomScale = zoom / 100;
+
+  useEffect(() => {
+    setZoom(100);
+    setPage(1);
+  }, [doc.id]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
 
   function zoomIn() {
-    setZoom((z) => Math.min(z + 25, 200));
+    setZoom((z) => Math.min(z + ZOOM_STEP, MAX_ZOOM));
   }
 
   function zoomOut() {
-    setZoom((z) => Math.max(z - 25, 50));
+    setZoom((z) => Math.max(z - ZOOM_STEP, MIN_ZOOM));
   }
 
   function prevPage() {
@@ -30,12 +45,21 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
     setPage((p) => Math.min(p + 1, totalPages));
   }
 
-  // Build the iframe src with the page anchor for PDFs
-  const iframeSrc = doc.fileUrl
-    ? isPdf
-      ? `${doc.fileUrl}#page=${page}&zoom=${zoom}&toolbar=0&navpanes=0&scrollbar=0`
-      : doc.fileUrl
-    : null;
+  const iframeSrc = useMemo(() => {
+    if (!doc.fileUrl) return null;
+    if (!isPdf) return doc.fileUrl;
+    return `${doc.fileUrl}#page=${page}&toolbar=0&navpanes=0&scrollbar=0`;
+  }, [doc.fileUrl, isPdf, page]);
+
+  function handleViewerWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      zoomIn();
+      return;
+    }
+    zoomOut();
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-gray-50 overflow-hidden">
@@ -51,7 +75,7 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={zoomOut}
-            disabled={zoom <= 50}
+            disabled={zoom <= MIN_ZOOM}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Zoom out"
           >
@@ -62,7 +86,7 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
           </span>
           <button
             onClick={zoomIn}
-            disabled={zoom >= 200}
+            disabled={zoom >= MAX_ZOOM}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Zoom in"
           >
@@ -72,22 +96,30 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
       </div>
 
       {/* Document render area */}
-      <div className="flex-1 overflow-hidden relative">
+      <div
+        className="flex-1 overflow-auto relative bg-gray-100"
+        onContextMenu={(e) => e.preventDefault()}
+        onWheel={handleViewerWheel}
+      >
         {iframeSrc ? (
-          <iframe
-            key={`${doc.id}-${page}-${zoom}`}
-            src={iframeSrc}
-            className="w-full h-full border-0"
+          <div
+            className="origin-top-left"
             style={{
-              transform: `scale(${zoom / 100})`,
-              transformOrigin: 'top center',
-              width: zoom > 100 ? `${(100 / zoom) * 100}%` : '100%',
-              height: zoom > 100 ? `${(100 / zoom) * 100}%` : '100%',
+              transform: `scale(${zoomScale})`,
+              width: `${100 / zoomScale}%`,
+              height: `${100 / zoomScale}%`,
             }}
-            title={doc.name}
-          />
+          >
+            <iframe
+              key={isPdf ? `${doc.id}-${page}` : doc.id}
+              src={iframeSrc}
+              className="w-full h-full border-0"
+              title={doc.name}
+              sandbox={isPdf ? undefined : 'allow-same-origin allow-scripts'}
+            />
+          </div>
         ) : (
-          /* No file URL — shouldn't happen after proper import but handle gracefully */
+          /* No file URL - should not happen after import, but keep a safe fallback */
           <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
             <FileText className="w-12 h-12 opacity-30" />
             <p className="text-sm">Unable to render document</p>
@@ -95,7 +127,7 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
         )}
       </div>
 
-      {/* Bottom pagination — only show for PDFs with known page count */}
+      {/* Bottom pagination - only show for PDFs with known page count */}
       {isPdf && (
         <div className="flex items-center justify-center gap-4 py-4 bg-gray-50 border-t border-gray-100 shrink-0">
           <button

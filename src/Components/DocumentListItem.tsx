@@ -66,7 +66,7 @@ export function DocumentListItem({
       <div className="shrink-0 w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center relative">
         <FileText className="w-6 h-6 text-gray-500" />
         {doc.isLocked && (
-          <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-900 rounded-full flex items-center justify-center shadow-sm">
+          <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center shadow-sm">
             <Key className="w-2.5 h-2.5 text-white" />
           </div>
         )}

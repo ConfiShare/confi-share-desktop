@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 import { Modal } from './Modal';
 import { useApp } from '../store/AppContext';
-import type { ConfiDocument } from '../types';
+import type { CdcContainer, ConfiDocument } from '../types';
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -36,6 +36,15 @@ async function getPdfPageCount(file: File): Promise<number> {
   });
 }
 
+function isCdcContainer(value: unknown): value is CdcContainer {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  const meta = obj.meta;
+  if (typeof meta !== 'object' || meta === null) return false;
+  const metaObj = meta as Record<string, unknown>;
+  return typeof metaObj.mime === 'string';
+}
+
 export function ImportConfirmModal() {
   const { closeModal, openModal, modal, addDocument } = useApp();
   const [loading, setLoading] = useState(false);
@@ -53,15 +62,18 @@ export function ImportConfirmModal() {
     try {
       const isCdc = file.name.toLowerCase().endsWith('.cdc');
       
-      let cdcContainer: any = null;
-      let displaySize = Math.round(file.size / 1024) + ' kb';
+      let cdcContainer: CdcContainer | null = null;
       let totalPages: number | undefined;
       let fileUrl = '';
 
       if (isCdc) {
         // Read .cdc file as text and parse JSON
         const text = await file.text();
-        cdcContainer = JSON.parse(text);
+        const parsed: unknown = JSON.parse(text);
+        if (!isCdcContainer(parsed)) {
+          throw new Error('Invalid .cdc container: missing meta.mime');
+        }
+        cdcContainer = parsed;
         // Container might have different metadata
       } else {
         // Regular file logic
@@ -85,7 +97,7 @@ export function ImportConfirmModal() {
         fileObject: file,
         fileUrl,
         totalPages,
-        cdcContainer,
+        cdcContainer: cdcContainer ?? undefined,
         isLocked: isCdc,
       };
 
@@ -118,7 +130,7 @@ export function ImportConfirmModal() {
         <button
           onClick={handleContinue}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 py-3.5 size-14 bg-green-600 hover:bg-green-700 active:bg-green-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3.5 size-14 bg-[#059669] hover:bg-green-700 active:bg-green-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
         >
           {loading ? (
             <>

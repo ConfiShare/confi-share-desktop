@@ -30,7 +30,7 @@ export function Sidebar() {
       <div className="px-4 pb-3">
         <div
           className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors ${
-            searchQuery ? 'border-green-400 bg-white' : 'border-gray-200 bg-gray-50'
+            searchQuery ? 'border-[#059669] bg-white' : 'border-gray-200 bg-gray-50'
           }`}
         >
           <Search className="w-6 h-6 text-gray-400 shrink-0" />
@@ -39,7 +39,7 @@ export function Sidebar() {
             placeholder="Search documents"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 bg-transparen size-10 text-sm text-gray-700 placeholder-gray-400 outline-none"
+            className="flex-1 bg-transparent size-10 text-sm text-gray-700 placeholder-gray-400 outline-none"
           />
         </div>
       </div>
@@ -84,7 +84,7 @@ export function Sidebar() {
       className="px-4 pb-12 pt-3 border-t border-gray-100 space-y-2">
         <button
           onClick={handleImport}
-          className="w-full flex size-14 items-center cursor-pointer justify-center gap-2 py-3 px-4 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors shadow-sm"
+          className="w-full flex size-14 items-center cursor-pointer justify-center gap-2 py-3 px-4 bg-[#059669] hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors shadow-sm"
         >
           <Plus className="w-6 h-6" />
           Import document

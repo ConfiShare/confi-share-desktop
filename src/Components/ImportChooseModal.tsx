@@ -34,7 +34,7 @@ export function ImportChooseModal() {
 
         <button
           onClick={handleChooseFile}
-          className="w-full py-3.5 size-14 cursor-pointer bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors"
+          className="w-full py-3.5 size-14 cursor-pointer bg-[#059669] hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors"
         >
           Choose file
         </button>

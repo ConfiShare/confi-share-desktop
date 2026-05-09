@@ -1,10 +1,10 @@
 import { AppProvider, useApp } from './store/AppContext';
-import { Sidebar } from '../src/Components/Sidebar';
-import { MainContent } from '../src/Components/Maincontent';
-import { SelectDocumentPanel } from '../src/Components/Selectdocumentpanel';
-import { ModalManager } from '../src/Components/Modalmanager';
-import { DocumentViewer } from '../src/Components/DocumentViewer';
-import { SettingsPage } from '../src/Components/SettingsPage';
+import { Sidebar } from './Components/Sidebar';
+import { MainContent } from './Components/Maincontent';
+import { SelectDocumentPanel } from './Components/Selectdocumentpanel';
+import { ModalManager } from './Components/Modalmanager';
+import { DocumentViewer } from './Components/DocumentViewer';
+import { SettingsPage } from './Components/SettingsPage';
 
 
 function AppShell() {

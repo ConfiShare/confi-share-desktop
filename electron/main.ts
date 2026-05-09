@@ -1,8 +1,11 @@
-import { app, BrowserWindow, shell, ipcMain, safeStorage } from 'electron'
+import * as electron from 'electron'
+import type { BrowserWindow as BrowserWindowType } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
 import { decryptCDCContainer, decryptPayloadWithKey } from './crypto.js'
+
+const { app, BrowserWindow, shell, ipcMain, safeStorage, session } = electron
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -161,7 +164,18 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, 'public')
   : RENDERER_DIST
 
-let win: BrowserWindow | null
+let win: BrowserWindowType | null
+const APP_ICON_PATH = path.join(process.env.VITE_PUBLIC!, 'app-icon.png')
+
+function isBlockedShortcut(input: Electron.Input): boolean {
+  const isZoomShortcut =
+    (input.control || input.meta) &&
+    ['Equal', 'NumpadAdd', 'Minus', 'NumpadSubtract', 'Digit0', 'Numpad0'].includes(input.code)
+  const isPrintShortcut = (input.control || input.meta) && input.code === 'KeyP'
+  const isSaveOrDownloadShortcut = (input.control || input.meta) && input.code === 'KeyS'
+  const isPrintScreen = input.code === 'PrintScreen'
+  return isZoomShortcut || isPrintShortcut || isSaveOrDownloadShortcut || isPrintScreen
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -171,12 +185,37 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#ffffff',
-    icon: path.join(process.env.VITE_PUBLIC!, 'electron-vite.svg'),
+    show: false, // Don't show the window until it's ready to avoid white screen
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  })
+
+  // Best-effort anti-capture protection supported by Electron on Windows/macOS.
+  win.setContentProtection(true)
+
+  // Keep app-level zoom fixed; the document viewer controls zoom itself.
+  win.webContents.setZoomFactor(1)
+  win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {})
+  win.webContents.on('zoom-changed', (event) => {
+    event.preventDefault()
+    win?.webContents.setZoomFactor(1)
+  })
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && isBlockedShortcut(input)) {
+      event.preventDefault()
+    }
+  })
+  win.webContents.on('context-menu', (event) => {
+    event.preventDefault()
+  })
+
+  // Show window when it's ready to handle the 'white screen' flash
+  win.once('ready-to-show', () => {
+    win?.show()
   })
 
   // Make all links open with the browser, not with the application
@@ -187,7 +226,6 @@ function createWindow() {
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
-    win.webContents.openDevTools()
   } else {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
@@ -211,4 +249,10 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  // Block file downloads for restricted document viewing.
+  session.defaultSession.on('will-download', (event) => {
+    event.preventDefault()
+  })
+  createWindow()
+})

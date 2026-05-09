@@ -19,6 +19,7 @@ interface AppContextValue {
   activeDocumentId: string | null;
   navigateTo: (view: ActiveView, docId?: string) => void;
   unlockDocument: (docId: string, passKey: string) => Promise<void>;
+  markDocumentRevoked: (docId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -41,13 +42,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (window.drmApi) {
         const storedDocs = await window.drmApi.loadList();
         // Reset transient fields
-        const hydrated = storedDocs.map((d: any) => ({
-          ...d,
-          fileObject: undefined,
-          fileUrl: undefined,
-          isLocked: true, // Always start locked as per user request
-          expiresAt: d.expiresAt ? new Date(d.expiresAt) : new Date(),
-        }));
+        const hydrated = storedDocs.map((d) => {
+          const doc = d as Partial<ConfiDocument> & { expiresAt?: string | Date };
+          return {
+            ...doc,
+            fileObject: undefined,
+            fileUrl: undefined,
+            isLocked: true, // Always start locked as per user request
+            expiresAt: doc.expiresAt ? new Date(doc.expiresAt) : new Date(),
+          } as ConfiDocument;
+        });
         setDocuments(hydrated);
       }
     }
@@ -58,7 +62,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (window.drmApi && documents.length > 0) {
       // We don't save fileUrl or fileObject to the json
-      const toSave = documents.map(({ fileUrl, fileObject, ...rest }) => rest);
+      const toSave = documents.map((doc) => {
+        const serializableDoc = { ...doc };
+        delete serializableDoc.fileUrl;
+        delete serializableDoc.fileObject;
+        return serializableDoc;
+      });
       window.drmApi.saveList(toSave);
     }
   }, [documents]);
@@ -83,7 +92,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addDocument = useCallback(async (doc: ConfiDocument) => {
-    let finalDoc = { ...doc };
+    const finalDoc = { ...doc };
     
     // If it has a fileObject, save it locally
     if (doc.fileObject && window.drmApi) {
@@ -105,10 +114,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const removeDocument = useCallback(async (id: string) => {
     setDocuments((prev) => {
       const newList = prev.filter((d) => d.id !== id);
-      if (window.drmApi) window.drmApi.saveList(newList.map(({ fileUrl, fileObject, ...rest }) => rest));
+      if (window.drmApi) {
+        const toSave = newList.map((doc) => {
+          const serializableDoc = { ...doc };
+          delete serializableDoc.fileUrl;
+          delete serializableDoc.fileObject;
+          return serializableDoc;
+        });
+        window.drmApi.saveList(toSave);
+      }
       return newList;
     });
     // Optional: Remove local file from disk too via IPC
+  }, []);
+
+  const markDocumentRevoked = useCallback((docId: string) => {
+    setDocuments((prev) =>
+      prev.map((doc) =>
+        doc.id === docId
+          ? {
+              ...doc,
+              status: 'revoked',
+              isLocked: true,
+              fileUrl: undefined,
+            }
+          : doc
+      )
+    );
   }, []);
 
   const getDocumentById = useCallback(
@@ -166,6 +198,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         activeDocumentId,
         navigateTo,
         unlockDocument,
+        markDocumentRevoked,
       }}
     >
       {children}

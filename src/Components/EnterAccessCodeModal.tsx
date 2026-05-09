@@ -2,9 +2,18 @@ import { useState } from "react";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { Modal } from "./Modal";
 import { useApp } from "../store/AppContext";
+import { isAccessRevokedError } from "../services/drmService";
 
 export function EnterAccessCodeModal() {
-  const { closeModal, modal, getDocumentById, navigateTo, unlockDocument } = useApp();
+  const {
+    closeModal,
+    openModal,
+    modal,
+    getDocumentById,
+    navigateTo,
+    unlockDocument,
+    markDocumentRevoked,
+  } = useApp();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -39,8 +48,15 @@ export function EnterAccessCodeModal() {
       // ✅ Success
       closeModal();
       navigateTo('document', doc.id);
-    } catch (err: any) {
-      setError(err.message || 'Verification failed. Please check your code.');
+    } catch (err) {
+      if (doc && isAccessRevokedError(err)) {
+        markDocumentRevoked(doc.id);
+        closeModal();
+        openModal({ type: 'access_revoked', documentId: doc.id });
+        return;
+      }
+      const message = err instanceof Error ? err.message : 'Verification failed. Please check your code.';
+      setError(message);
     } finally {
       setIsVerifying(false);
     }
@@ -82,7 +98,7 @@ export function EnterAccessCodeModal() {
           onKeyDown={handleKeyDown}
           style={{padding:"1rem"}}
           className={`w-full text-sm text-gray-700 rounded-xl size-12 placeholder-gray-400 outline-none border pb-3 mb-4 transition-colors ${
-            error ? "border-red-400" : "border-gray-200 focus:border-green-500"
+            error ? "border-red-400" : "border-gray-200 focus:border-[#059669]"
           }`}
         />
 
@@ -102,7 +118,7 @@ export function EnterAccessCodeModal() {
         <button
           onClick={handleVerify}
           disabled={isVerifying}
-          className="w-full flex items-center justify-center gap-2 py-3.5 size-14 bg-green-600 hover:bg-green-700 active:bg-green-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3.5 size-14 bg-[#059669] hover:bg-green-700 active:bg-green-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
         >
           {isVerifying ? (
             <>

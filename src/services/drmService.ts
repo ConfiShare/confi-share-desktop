@@ -1,9 +1,59 @@
+import type { CdcContainer } from '../types';
+
 const BASE_URL = 'https://confishare-api.onrender.com/api/v1';
 
 export interface ActivationResponse {
   offlineToken: string;
   offlineExpiresAt: string;
   offlineDays: number;
+}
+
+interface DecryptedDocumentData {
+  // decryptedPayload -> JSON.parse(...) produces this structure.
+  // `file` is a base64 string; AppContext turns it back into a Blob.
+  file: string;
+  docId?: string;
+  id?: string;
+  [key: string]: unknown;
+}
+
+type DrmUnlockErrorKind = 'invalid_access_code' | 'access_revoked' | 'activation_failed';
+
+export class DrmUnlockError extends Error {
+  kind: DrmUnlockErrorKind;
+  status?: number;
+
+  constructor(kind: DrmUnlockErrorKind, message: string, status?: number) {
+    super(message);
+    this.name = 'DrmUnlockError';
+    this.kind = kind;
+    this.status = status;
+  }
+}
+
+function isRevocationMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('revok') ||
+    normalized.includes('withdrawn') ||
+    normalized.includes('no longer available') ||
+    normalized.includes('access denied')
+  );
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallback;
+}
+
+export function isAccessRevokedError(error: unknown): boolean {
+  if (error instanceof DrmUnlockError) {
+    return error.kind === 'access_revoked';
+  }
+  const message = getErrorMessage(error, '');
+  return isRevocationMessage(message);
 }
 
 export const drmService = {
@@ -19,14 +69,27 @@ export const drmService = {
       body: JSON.stringify({ docId, passKey }),
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({} as Record<string, unknown>));
 
     if (!response.ok) {
-      throw new Error(result.message || 'Failed to activate document');
+      const message =
+        typeof result.message === 'string' && result.message.trim()
+          ? result.message
+          : 'Failed to activate document';
+
+      if (response.status === 403 || response.status === 410 || isRevocationMessage(message)) {
+        throw new DrmUnlockError(
+          'access_revoked',
+          'Access to this document has been revoked by the owner.',
+          response.status
+        );
+      }
+
+      throw new DrmUnlockError('activation_failed', message, response.status);
     }
 
     // Backend returns { message: "...", data: { ... } }
-    return result.data;
+    return result.data as ActivationResponse;
   },
 
   /**
@@ -34,7 +97,11 @@ export const drmService = {
    * Follows the refined flow: always prompt for passKey, 
    * skip backend activation if a valid offline token exists.
    */
-  async unlockDocument(docId: string, container: any, passKey: string): Promise<{ decryptedData: any; realDocId: string; offlineExpiresAt?: string }> {
+  async unlockDocument(
+    docId: string,
+    container: CdcContainer,
+    passKey: string
+  ): Promise<{ decryptedData: DecryptedDocumentData; realDocId: string; offlineExpiresAt?: string }> {
     if (!window.drmApi) {
       console.error('window.drmApi is undefined. Preload script may have failed to load.');
       throw new Error('Internal Error: DRM interface not available. Please restart the application.');
@@ -42,18 +109,22 @@ export const drmService = {
 
     // 1. Decipher container with passKey to recover realDocId AND contentKey
     // This also serves as validation of the passKey
-    let decryptedPayload, contentKey;
+    let decryptedPayload = '';
+    let contentKey = '';
     try {
       const result = await window.drmApi.decryptCDC(container, passKey);
       decryptedPayload = result.decryptedPayload;
       contentKey = result.contentKey;
     } catch (e) {
       console.error('Decryption failed during unlock:', e);
-      throw new Error("Invalid access code. Please check and try again.");
+      throw new DrmUnlockError(
+        'invalid_access_code',
+        'Invalid access code. Please check and try again.'
+      );
     }
     
-    const decryptedData = JSON.parse(decryptedPayload);
-    const realDocId = decryptedData.docId || decryptedData.id;
+    const decryptedData = JSON.parse(decryptedPayload) as DecryptedDocumentData;
+    const realDocId = decryptedData.docId ?? decryptedData.id;
 
     if (!realDocId) {
        throw new Error("Invalid document: docId missing from payload");
@@ -72,7 +143,24 @@ export const drmService = {
 
     // 3. Token missing or expired: Activate with backend using the REAL docId
     console.log('Token invalid or missing, activating with backend...');
-    const activation = await this.activate(realDocId, passKey);
+    let activation: ActivationResponse;
+    try {
+      activation = await this.activate(realDocId, passKey);
+    } catch (error) {
+      if (isAccessRevokedError(error)) {
+        throw new DrmUnlockError(
+          'access_revoked',
+          'Access to this document has been revoked by the owner.'
+        );
+      }
+      if (error instanceof DrmUnlockError) {
+        throw error;
+      }
+      throw new DrmUnlockError(
+        'activation_failed',
+        getErrorMessage(error, 'Failed to activate document')
+      );
+    }
     console.log('Activation Successful:', activation);
 
     // 4. Store activation data, contentKey, and passKey securely

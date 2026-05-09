@@ -1,5 +1,12 @@
 export type DocumentStatus = 'active' | 'offline' | 'code_expired' | 'revoked';
 
+export interface CdcContainerMeta {
+  // Used when we render the unlocked document blob.
+  mime: string;
+}
+
+export type CdcContainer = { meta: CdcContainerMeta } & Record<string, unknown>;
+
 export interface ConfiDocument {
   id: string;
   realDocId?: string;     // The actual mongoose ID from the backend
@@ -13,7 +20,7 @@ export interface ConfiDocument {
   fileObject?: File;       // the actual imported File (transient)
   fileUrl?: string;        // object URL created from fileObject/localPath for rendering
   totalPages?: number;     // total page count extracted from the file
-  cdcContainer?: any;      // the raw .cdc JSON container
+  cdcContainer?: CdcContainer; // the raw .cdc JSON container
   isLocked?: boolean;      // whether the document is currently locked
 }
 

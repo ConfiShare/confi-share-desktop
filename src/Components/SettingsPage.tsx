@@ -1,4 +1,4 @@
-import { ChevronRight, Mail, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Mail, ArrowLeft } from "lucide-react";
 
 interface SettingsPageProps {
   onBack: () => void;
@@ -27,15 +27,20 @@ interface SettingsRowProps {
   children?: React.ReactNode;
 }
 
-function SettingsRow({ title, description, onClick, children }: SettingsRowProps) {
+function SettingsRow({
+  title,
+  description,
+  onClick,
+  children,
+}: SettingsRowProps) {
   const isClickable = !!onClick;
 
   return (
     <div
       onClick={onClick}
-      style={{padding:"0.6rem"}}
+      style={{ padding: "0.6rem" }}
       className={`flex items-center justify-between px-6 py-4 ${
-        isClickable ? 'cursor-pointer hover:bg-gray-50 transition-colors' : ''
+        isClickable ? "cursor-pointer hover:bg-gray-50 transition-colors" : ""
       }`}
     >
       <div className="flex-1 min-w-0 pr-4">
@@ -68,7 +73,6 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-2xl mx-auto">
-
           {/* Security */}
           <SettingsSection title="Security">
             <SettingsRow
@@ -84,12 +88,12 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               description="Need help opening a document or renewing access? Our support team is here to help you"
             >
               <a
-                href="mailto:support@confishare.com"
+                href="mailto:support@confishare.io"
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center font-medium justify-between gap-1.5 mt-2 text-sm text-green-600 hover:text-green-700 transition-colors"
+                className="inline-flex items-center font-medium justify-between gap-1.5 mt-2 text-sm text-[#059669] hover:text-green-700 transition-colors"
               >
                 <Mail className="w-5 h-5" />
-                support@confishare.com
+                support@confishare.io
               </a>
             </SettingsRow>
           </SettingsSection>
@@ -99,12 +103,16 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
             <SettingsRow
               title="Privacy Policy"
               description="Learn how we handle your data and protect your privacy."
-               onClick={() => window.open("https://google.com", "_blank")}
+              onClick={() =>
+                window.open("https://confishare.io/terms-of-service/", "_blank")
+              }
             />
             <SettingsRow
               title="Terms of Service"
               description="Read the terms that govern your use of Confishare"
-              onClick={() => {}}
+              onClick={() =>
+                window.open("https://confishare.io/policy/", "_blank")
+              }
             />
           </SettingsSection>
 
@@ -115,7 +123,6 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               description="Confishare is a secure document viewer designed to give you trusted, controlled access to sensitive files across desktop devices."
             />
           </SettingsSection>
-
         </div>
       </div>
     </div>
