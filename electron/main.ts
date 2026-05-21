@@ -173,8 +173,7 @@ function isBlockedShortcut(input: Electron.Input): boolean {
     ['Equal', 'NumpadAdd', 'Minus', 'NumpadSubtract', 'Digit0', 'Numpad0'].includes(input.code)
   const isPrintShortcut = (input.control || input.meta) && input.code === 'KeyP'
   const isSaveOrDownloadShortcut = (input.control || input.meta) && input.code === 'KeyS'
-  const isPrintScreen = input.code === 'PrintScreen'
-  return isZoomShortcut || isPrintShortcut || isSaveOrDownloadShortcut || isPrintScreen
+  return isZoomShortcut || isPrintShortcut || isSaveOrDownloadShortcut
 }
 
 function createWindow() {
@@ -194,8 +193,8 @@ function createWindow() {
     },
   })
 
-  // Best-effort anti-capture protection supported by Electron on Windows/macOS.
-  win.setContentProtection(true)
+  // Allow screenshots and screen sharing/recording tools to capture the app window.
+  win.setContentProtection(false)
 
   // Keep app-level zoom fixed; the document viewer controls zoom itself.
   win.webContents.setZoomFactor(1)

@@ -36,5 +36,9 @@ export type ModalType =
 export interface ModalState {
   type: ModalType;
   documentId?: string;
-  pendingFile?: File | null;
+  pendingFiles?: File[] | null;
+  importSummary?: {
+    importedCount: number;
+    failedCount: number;
+  };
 }

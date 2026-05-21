@@ -12,11 +12,11 @@ export function ImportChooseModal() {
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      openModal({ type: "import_confirm", pendingFile: file });
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length > 0) {
+      openModal({ type: "import_confirm", pendingFiles: files });
     }
-    // Reset so same file can be re-selected
+    // Reset so the same file(s) can be re-selected
     e.target.value = "";
   }
 
@@ -29,21 +29,22 @@ export function ImportChooseModal() {
         </div>
 
         <h2 className="text-[1.125rem] font-semibold text-gray-900 mb-7">
-          Import a secure document
+          Import secure document(s)
         </h2>
 
         <button
           onClick={handleChooseFile}
           className="w-full py-3.5 size-14 cursor-pointer bg-[#059669] hover:bg-green-700 active:bg-green-800 text-white font-semibold text-sm rounded-xl transition-colors"
         >
-          Choose file
+          Choose file(s)
         </button>
 
         <input
           ref={fileInputRef}
           type="file"
           className="hidden"
-          accept=".cdc,.pdf,.doc,.docx"
+          accept=".cdc,.zip,.pdf,.doc,.docx"
+          multiple
           onChange={handleFileChange}
         />
       </div>

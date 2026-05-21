@@ -3,7 +3,10 @@ import { Modal } from "./Modal";
 import { useApp } from "../store/AppContext";
 
 export function ImportSuccessModal() {
-  const { closeModal } = useApp();
+  const { closeModal, modal } = useApp();
+  const importedCount = modal.importSummary?.importedCount ?? 1;
+  const failedCount = modal.importSummary?.failedCount ?? 0;
+  const isPlural = importedCount !== 1;
 
   return (
     <Modal onClose={closeModal} showClose={true}>
@@ -14,8 +17,13 @@ export function ImportSuccessModal() {
         </div>
 
         <h2 className="text-[1.125rem] font-semibold text-gray-900 mb-6">
-          Document imported successfully
+          {importedCount} document{isPlural ? "s" : ""} imported successfully
         </h2>
+        {failedCount > 0 ? (
+          <p className="text-xs text-amber-700 mb-5 text-center">
+            {failedCount} file{failedCount > 1 ? "s were" : " was"} skipped or failed during import.
+          </p>
+        ) : null}
 
         <button
           onClick={closeModal}

@@ -16,5 +16,5 @@ export function formatExpiry(date: Date): string {
   const month = date.toLocaleString('en-US', { month: 'short' });
   const day = date.getDate();
   const year = date.getFullYear();
-  return `${isExpired ? 'Expired' : 'Expires'} ${month} ${day}, ${year}`;
+  return `Offline access ${isExpired ? 'expired' : 'expires'} ${month} ${day}, ${year}`;
 }

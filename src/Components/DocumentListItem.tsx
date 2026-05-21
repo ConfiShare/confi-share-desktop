@@ -78,7 +78,7 @@ export function DocumentListItem({
         <div className="flex items-center gap-2 mt-0.5">
           <StatusBadge status={doc.status} />
           {doc.realDocId && (
-            <span className="text-[11px] text-gray-400">{formatExpiry(doc.expiresAt)}</span>
+            <span className="text-[9px] text-gray-400">{formatExpiry(doc.expiresAt)}</span>
           )}
         </div>
       </div>

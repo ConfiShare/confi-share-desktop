@@ -235,8 +235,7 @@ function isBlockedShortcut(input) {
   const isZoomShortcut = (input.control || input.meta) && ["Equal", "NumpadAdd", "Minus", "NumpadSubtract", "Digit0", "Numpad0"].includes(input.code);
   const isPrintShortcut = (input.control || input.meta) && input.code === "KeyP";
   const isSaveOrDownloadShortcut = (input.control || input.meta) && input.code === "KeyS";
-  const isPrintScreen = input.code === "PrintScreen";
-  return isZoomShortcut || isPrintShortcut || isSaveOrDownloadShortcut || isPrintScreen;
+  return isZoomShortcut || isPrintShortcut || isSaveOrDownloadShortcut;
 }
 function createWindow() {
   win = new BrowserWindow({
@@ -255,7 +254,7 @@ function createWindow() {
       nodeIntegration: false
     }
   });
-  win.setContentProtection(true);
+  win.setContentProtection(false);
   win.webContents.setZoomFactor(1);
   win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {
   });
