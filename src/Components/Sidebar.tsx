@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Settings, Plus } from 'lucide-react';
+import { Search, Plus, MoreHorizontal } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { DocumentListItem } from './DocumentListItem';
 
@@ -47,7 +47,7 @@ export function Sidebar() {
       {/* Document list */}
       <div 
     style={{paddingTop:"1rem"}}
-      className="flex-1 overflow-y-auto px-3 py-12">
+      className="emerald-scrollbar flex-1 overflow-y-auto px-3 py-12">
         {filteredDocuments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-sm font-medium text-gray-700">
@@ -97,8 +97,8 @@ export function Sidebar() {
               : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
           }`}
         >
-          <Settings className="w-6 h-6" />
-          Settings
+          <MoreHorizontal className="w-6 h-6" />
+          About ConfiShare
         </button>
       </div>
     </aside>

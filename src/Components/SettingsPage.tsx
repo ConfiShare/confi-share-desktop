@@ -67,7 +67,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
         >
           <ArrowLeft className="w-4 h-4 text-gray-700" />
         </button>
-        <h1 className="text-base font-semibold text-gray-900">Settings</h1>
+        <h1 className="text-base font-semibold text-gray-900">About ConfiShare</h1>
       </div>
 
       {/* Scrollable content */}
