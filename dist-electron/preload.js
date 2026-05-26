@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld("drmApi", {
   saveList: (documents) => ipcRenderer.invoke("docs:save-list", documents),
   loadList: () => ipcRenderer.invoke("docs:load-list"),
   saveFileLocally: (docId, fileName, arrayBuffer) => ipcRenderer.invoke("docs:save-file-locally", docId, fileName, arrayBuffer),
-  readLocalFile: (localPath) => ipcRenderer.invoke("docs:read-local-file", localPath)
+  readLocalFile: (localPath) => ipcRenderer.invoke("docs:read-local-file", localPath),
+  convertToPdf: (docId, base64Data, originalName, originalMime) => ipcRenderer.invoke("drm:convert-office-to-pdf", docId, base64Data, originalName, originalMime)
+});
+contextBridge.exposeInMainWorld("confiShare", {
+  openFile: (path, passKey) => ipcRenderer.invoke("open-cdc-file", path, passKey),
+  closeSession: (sessionDir) => ipcRenderer.invoke("close-cdc-session", sessionDir)
 });
 //# sourceMappingURL=preload.js.map

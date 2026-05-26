@@ -202,7 +202,7 @@ export function ImportConfirmModal() {
         const shortErrorList = errors.slice(0, 3).join('\n');
         alert(
           `No documents were imported.\n${
-            shortErrorList || 'Please ensure the files are valid .cdc or .zip containers.'
+            shortErrorList || 'Please ensure the files are supported (CDC, PDF, Office, spreadsheet, or image formats).'
           }`
         );
         return;

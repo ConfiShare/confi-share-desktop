@@ -59,4 +59,10 @@ contextBridge.exposeInMainWorld('drmApi', {
   loadList: () => ipcRenderer.invoke('docs:load-list'),
   saveFileLocally: (docId: string, fileName: string, arrayBuffer: ArrayBuffer) => ipcRenderer.invoke('docs:save-file-locally', docId, fileName, arrayBuffer),
   readLocalFile: (localPath: string) => ipcRenderer.invoke('docs:read-local-file', localPath),
+  convertToPdf: (docId: string, base64Data: string, originalName: string, originalMime: string) => ipcRenderer.invoke('drm:convert-office-to-pdf', docId, base64Data, originalName, originalMime),
+})
+
+contextBridge.exposeInMainWorld('confiShare', {
+  openFile: (path: string, passKey?: string) => ipcRenderer.invoke('open-cdc-file', path, passKey),
+  closeSession: (sessionDir: string) => ipcRenderer.invoke('close-cdc-session', sessionDir),
 })

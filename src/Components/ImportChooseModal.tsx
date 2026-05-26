@@ -43,7 +43,7 @@ export function ImportChooseModal() {
           ref={fileInputRef}
           type="file"
           className="hidden"
-          accept=".cdc,.zip,.pdf,.doc,.docx"
+          accept=".cdc,.zip,.pdf,.doc,.docx,.rtf,.odt,.txt,.xls,.xlsx,.csv,.ods,.ppt,.pptx,.odp,.png,.jpg,.jpeg,.gif,.bmp,.webp,.svg,.tif,.tiff,.ico,.avif"
           multiple
           onChange={handleFileChange}
         />

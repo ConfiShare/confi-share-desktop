@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
 import { decryptCDCContainer, decryptPayloadWithKey } from './crypto.js'
+import { convertToPdfSecurely, ensureConversionDirReady } from './conversion.js'
+import { openCDCFile, cleanupSession, cleanupAllSessions } from './documentProcessor.js'
 
-const { app, BrowserWindow, shell, ipcMain, safeStorage, session } = electron
+const { app, BrowserWindow, ipcMain, safeStorage, session } = electron
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -100,6 +102,39 @@ ipcMain.handle('drm:decrypt-payload', async (_event, container, contentKey) => {
   }
 });
 
+// IPC Handler to convert Word, Excel, PowerPoint, RTF, or TXT documents to PDF securely
+ipcMain.handle('drm:convert-office-to-pdf', async (_event, docId, base64Data, originalName, originalMime) => {
+  try {
+    const buffer = Buffer.from(base64Data, 'base64');
+    const pdfBuffer = await convertToPdfSecurely(docId, buffer, originalMime, originalName);
+    return pdfBuffer;
+  } catch (error: any) {
+    console.error('Office document conversion IPC failed:', error);
+    throw new Error(`Office document conversion IPC failed: ${error.message}`);
+  }
+});
+
+// IPC Handler to open CDC document through secure pipeline
+ipcMain.handle('open-cdc-file', async (_event, filePath, passKey) => {
+  try {
+    return await openCDCFile(filePath, passKey);
+  } catch (error: any) {
+    console.error('Secure CDC document viewer pipeline failed:', error);
+    throw new Error(error.message || 'Secure CDC document viewer pipeline failed.');
+  }
+});
+
+// IPC Handler to close CDC session workspace
+ipcMain.handle('close-cdc-session', async (_event, sessionDir) => {
+  try {
+    cleanupSession(sessionDir);
+    return true;
+  } catch (error) {
+    console.error('Failed to close secure session:', error);
+    return false;
+  }
+});
+
 // Secure storage handlers using Electron's safeStorage
 ipcMain.handle('secure:set-data', async (_event, docId, key, value) => {
   if (!safeStorage.isEncryptionAvailable()) {
@@ -173,7 +208,15 @@ function isBlockedShortcut(input: Electron.Input): boolean {
     ['Equal', 'NumpadAdd', 'Minus', 'NumpadSubtract', 'Digit0', 'Numpad0'].includes(input.code)
   const isPrintShortcut = (input.control || input.meta) && input.code === 'KeyP'
   const isSaveOrDownloadShortcut = (input.control || input.meta) && input.code === 'KeyS'
-  return isZoomShortcut || isPrintShortcut || isSaveOrDownloadShortcut
+  
+  // Strictly block DevTools key combos in production
+  const isDevTools = (app.isPackaged || !VITE_DEV_SERVER_URL) && (
+    input.code === 'F12' ||
+    ((input.control || input.meta) && input.shift && input.code === 'KeyI') ||
+    ((input.control || input.meta) && input.alt && input.code === 'KeyI')
+  )
+  
+  return isZoomShortcut || isPrintShortcut || isSaveOrDownloadShortcut || isDevTools
 }
 
 function createWindow() {
@@ -190,6 +233,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   })
 
@@ -217,11 +261,22 @@ function createWindow() {
     win?.show()
   })
 
-  // Make all links open with the browser, not with the application
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https:')) shell.openExternal(url)
+  // Block all external redirects and shell opening handlers
+  win.webContents.setWindowOpenHandler(() => {
     return { action: 'deny' }
   })
+
+  // Prevent navigation inside the window to any untrusted external domains
+  win.webContents.on('will-navigate', (event) => {
+    event.preventDefault()
+  })
+
+  // Block DevTools from opening in production environment
+  if (app.isPackaged || !VITE_DEV_SERVER_URL) {
+    win.webContents.on('devtools-opened', () => {
+      win?.webContents.closeDevTools()
+    })
+  }
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
@@ -253,5 +308,25 @@ app.whenReady().then(() => {
   session.defaultSession.on('will-download', (event) => {
     event.preventDefault()
   })
+  ensureConversionDirReady(); // Prepare secure temp dir
   createWindow()
+})
+
+app.on('will-quit', () => {
+  // Wipes all active in-memory CDC session directories
+  try {
+    cleanupAllSessions()
+  } catch (err) {
+    console.error('Failed to securely wipe active CDC sessions:', err)
+  }
+
+  // Clear any remaining temporary conversion files on quit
+  try {
+    const tempDir = path.join(app.getPath('userData'), 'temp_conversions');
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  } catch (err) {
+    console.error('Failed to clean up temp conversions directory on quit:', err);
+  }
 })

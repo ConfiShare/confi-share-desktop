@@ -12,12 +12,17 @@ declare global {
       loadList: () => Promise<unknown[]>;
       saveFileLocally: (docId: string, fileName: string, arrayBuffer: ArrayBuffer) => Promise<string>;
       readLocalFile: (localPath: string) => Promise<Uint8Array>;
+      convertToPdf: (docId: string, base64Data: string, originalName: string, originalMime: string) => Promise<Uint8Array>;
     };
     ipcRenderer: {
       invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
       send: (channel: string, ...args: unknown[]) => void;
       on: (channel: string, listener: (event: unknown, ...args: unknown[]) => void) => void;
       off: (channel: string, listener: (event: unknown, ...args: unknown[]) => void) => void;
+    };
+    confiShare: {
+      openFile: (path: string, passKey?: string) => Promise<{ pdfPath: string; sessionDir: string }>;
+      closeSession: (sessionDir: string) => Promise<boolean>;
     };
   }
 }
