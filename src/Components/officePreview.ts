@@ -62,11 +62,18 @@ interface DocxNumberingRef {
   ilvl?: number;
 }
 
+interface ParagraphSpacing {
+  lineHeight?: string;
+  marginTop?: string;
+  marginBottom?: string;
+}
+
 interface DocxStyleMaps {
   paragraphAlign: Map<string, TextAlign>;
   paragraphRunStyle: Map<string, InlineStyle>;
   runStyle: Map<string, InlineStyle>;
   paragraphNumbering: Map<string, DocxNumberingRef>;
+  paragraphSpacing: Map<string, ParagraphSpacing>;
   defaultParagraphStyleId?: string;
   defaultParagraphAlign?: TextAlign;
 }
@@ -77,6 +84,7 @@ interface DocxRawStyle {
   runStyle: InlineStyle;
   paragraphAlign?: TextAlign;
   numbering?: DocxNumberingRef;
+  paragraphSpacing?: ParagraphSpacing;
 }
 
 interface DocxNumberingMaps {
@@ -424,9 +432,12 @@ function wrapRunText(text: string, style: InlineStyle): string {
   return `<span style="${css}">${chunk.html}</span>`;
 }
 
-function renderParagraph(contentHtml: string, align?: TextAlign): string {
+function renderParagraph(contentHtml: string, align?: TextAlign, extraStyle?: string): string {
   if (!contentHtml.trim()) return '<p>&nbsp;</p>';
-  const style = align ? ` style="text-align:${align}"` : '';
+  const styles: string[] = [];
+  if (align) styles.push(`text-align:${align}`);
+  if (extraStyle) styles.push(extraStyle);
+  const style = styles.length > 0 ? ` style="${styles.join(';')}"` : '';
   return `<p${style}>${contentHtml}</p>`;
 }
 
@@ -607,6 +618,49 @@ function parseDocxRunProperties(runProps: Element | null): InlineStyle {
   return style;
 }
 
+function parseTwipsToPt(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return `${(parsed / 20).toFixed(2).replace(/\.00$/, '')}pt`;
+}
+
+function parseDocxParagraphSpacing(pPr: Element | null): ParagraphSpacing | undefined {
+  if (!pPr) return undefined;
+  const spacingEl = getFirstChildByLocalName(pPr, 'spacing');
+  if (!spacingEl) return undefined;
+
+  const lineRaw = getAttributeByLocalName(spacingEl, 'line');
+  const lineRule = getAttributeByLocalName(spacingEl, 'lineRule')?.toLowerCase();
+  const beforeRaw = getAttributeByLocalName(spacingEl, 'before');
+  const afterRaw = getAttributeByLocalName(spacingEl, 'after');
+  const spacing: ParagraphSpacing = {};
+
+  if (lineRaw) {
+    const lineVal = Number(lineRaw);
+    if (Number.isFinite(lineVal) && lineVal > 0) {
+      if (lineRule === 'exact' || lineRule === 'atleast') {
+        spacing.lineHeight = `${(lineVal / 20).toFixed(2).replace(/\.00$/, '')}pt`;
+      } else {
+        spacing.lineHeight = `${(lineVal / 240).toFixed(2).replace(/\.00$/, '')}`;
+      }
+    }
+  }
+
+  spacing.marginTop = parseTwipsToPt(beforeRaw);
+  spacing.marginBottom = parseTwipsToPt(afterRaw);
+  return Object.keys(spacing).length > 0 ? spacing : undefined;
+}
+
+function paragraphSpacingToCss(spacing?: ParagraphSpacing): string {
+  if (!spacing) return '';
+  const css: string[] = [];
+  if (spacing.lineHeight) css.push(`line-height:${spacing.lineHeight}`);
+  if (spacing.marginTop) css.push(`margin-top:${spacing.marginTop}`);
+  if (spacing.marginBottom) css.push(`margin-bottom:${spacing.marginBottom}`);
+  return css.join(';');
+}
+
 function parseDocxNumberingRef(container: Element | null): DocxNumberingRef | undefined {
   if (!container) return undefined;
   const numPr = getFirstChildByLocalName(container, 'numPr');
@@ -694,6 +748,7 @@ function parseDocxStyleMaps(stylesXml: string | null): DocxStyleMaps {
     paragraphRunStyle: new Map(),
     runStyle: new Map(),
     paragraphNumbering: new Map(),
+    paragraphSpacing: new Map(),
   };
   if (!stylesXml) return maps;
 
@@ -725,6 +780,7 @@ function parseDocxStyleMaps(stylesXml: string | null): DocxStyleMaps {
       getAttributeByLocalName(getFirstChildByLocalName(pPr ?? styleElement, 'jc') ?? styleElement, 'val')
     );
     const numbering = parseDocxNumberingRef(pPr);
+    const paragraphSpacing = parseDocxParagraphSpacing(pPr);
 
     const isDefaultStyleAttr = getAttributeByLocalName(styleElement, 'default');
     const isDefaultStyle = isDefaultStyleAttr ? ['1', 'true', 'on'].includes(isDefaultStyleAttr.toLowerCase()) : false;
@@ -738,24 +794,31 @@ function parseDocxStyleMaps(stylesXml: string | null): DocxStyleMaps {
       runStyle: parseDocxRunProperties(rPr),
       paragraphAlign,
       numbering,
+      paragraphSpacing,
     });
   }
 
-  const resolvedCache = new Map<string, { runStyle: InlineStyle; paragraphAlign?: TextAlign; numbering?: DocxNumberingRef }>();
+  const resolvedCache = new Map<string, { runStyle: InlineStyle; paragraphAlign?: TextAlign; numbering?: DocxNumberingRef; paragraphSpacing?: ParagraphSpacing }>;
   const resolving = new Set<string>();
 
-  const resolveStyle = (styleId: string): { runStyle: InlineStyle; paragraphAlign?: TextAlign; numbering?: DocxNumberingRef } => {
+  const resolveStyle = (styleId: string): { runStyle: InlineStyle; paragraphAlign?: TextAlign; numbering?: DocxNumberingRef; paragraphSpacing?: ParagraphSpacing } => {
     const cached = resolvedCache.get(styleId);
     if (cached) return cached;
     const raw = rawStyles.get(styleId);
     if (!raw) return { runStyle: {} };
 
     if (resolving.has(styleId)) {
-      return { runStyle: raw.runStyle, paragraphAlign: raw.paragraphAlign, numbering: raw.numbering };
+      return {
+        runStyle: raw.runStyle,
+        paragraphAlign: raw.paragraphAlign,
+        numbering: raw.numbering,
+        paragraphSpacing: raw.paragraphSpacing,
+      };
     }
+
     resolving.add(styleId);
 
-    let inherited: { runStyle: InlineStyle; paragraphAlign?: TextAlign; numbering?: DocxNumberingRef } = { runStyle: {} };
+    let inherited: { runStyle: InlineStyle; paragraphAlign?: TextAlign; numbering?: DocxNumberingRef; paragraphSpacing?: ParagraphSpacing } = { runStyle: {} };
     if (raw.basedOn) {
       const parentRaw = rawStyles.get(raw.basedOn);
       if (parentRaw && parentRaw.type === raw.type) inherited = resolveStyle(raw.basedOn);
@@ -773,6 +836,7 @@ function parseDocxStyleMaps(stylesXml: string | null): DocxStyleMaps {
       runStyle: mergeStyles(inherited.runStyle, raw.runStyle),
       paragraphAlign: raw.paragraphAlign ?? inherited.paragraphAlign,
       numbering,
+      paragraphSpacing: raw.paragraphSpacing ?? inherited.paragraphSpacing,
     };
     resolving.delete(styleId);
     resolvedCache.set(styleId, resolved);
@@ -785,6 +849,7 @@ function parseDocxStyleMaps(stylesXml: string | null): DocxStyleMaps {
       maps.paragraphRunStyle.set(styleId, resolved.runStyle);
       if (resolved.paragraphAlign) maps.paragraphAlign.set(styleId, resolved.paragraphAlign);
       if (resolved.numbering) maps.paragraphNumbering.set(styleId, resolved.numbering);
+      if (resolved.paragraphSpacing) maps.paragraphSpacing.set(styleId, resolved.paragraphSpacing);
     } else if (raw.type === 'character') {
       maps.runStyle.set(styleId, resolved.runStyle);
     }
@@ -893,8 +958,11 @@ function renderDocxParagraph(
     : styleMaps.defaultParagraphStyleId ?? 'Normal';
   const paragraphStyle = styleMaps.paragraphRunStyle.get(effectiveStyleRef) ?? {};
   const align = resolveDocxParagraphAlignment(paragraph, styleMaps, numberingMaps) ?? 'left';
+  const styleSpacing = styleMaps.paragraphSpacing.get(effectiveStyleRef);
+  const directSpacing = parseDocxParagraphSpacing(pPr);
+  const paragraphStyleCss = paragraphSpacingToCss(directSpacing ?? styleSpacing);
   const contentHtml = renderDocxRuns(paragraph, styleMaps, paragraphStyle);
-  return renderParagraph(contentHtml, align);
+  return renderParagraph(contentHtml, align, paragraphStyleCss);
 }
 
 function renderDocxTable(table: Element, styleMaps: DocxStyleMaps, numberingMaps: DocxNumberingMaps): string {
