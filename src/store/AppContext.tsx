@@ -148,6 +148,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [documents]
   );
 
+  const resolveDocumentStatus = useCallback(async (doc: ConfiDocument): Promise<DocumentStatus> => {
+    if (doc.status === 'revoked') return 'revoked';
+    if (!doc.cdcContainer) return 'active';
+
+    const unlocked = await drmService.isDocumentUnlocked(doc.id);
+    if (unlocked) return 'offline';
+    return doc.realDocId ? 'code_expired' : 'active';
+  }, []);
+
+  const refreshStatuses = useCallback(async () => {
+    if (documents.length === 0) return;
+
+    const updated = await Promise.all(
+      documents.map(async (doc) => {
+        const status = await resolveDocumentStatus(doc);
+        return status === doc.status ? doc : { ...doc, status };
+      })
+    );
+
+    const hasChanges = updated.some((doc, index) => doc !== documents[index]);
+    if (hasChanges) {
+      setDocuments(updated);
+    }
+  }, [documents, resolveDocumentStatus]);
+
+  useEffect(() => {
+    refreshStatuses();
+  }, [refreshStatuses]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      refreshStatuses();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [refreshStatuses]);
+
   const unlockDocument = useCallback(async (docId: string, passKey: string) => {
     const doc = getDocumentById(docId);
     if (!doc || !doc.cdcContainer) throw new Error('Document not found or not a protected file');
@@ -164,6 +201,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: doc.cdcContainer.meta.mime });
       const fileUrl = URL.createObjectURL(blob);
+      const now = new Date();
+      const status: DocumentStatus =
+        offlineExpiresAt && new Date(offlineExpiresAt) > now ? 'offline' : 'code_expired';
 
       setDocuments(prev => prev.map(d => 
         d.id === docId ? { 
@@ -172,7 +212,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           realDocId, 
           isLocked: false,
           accessCode: passKey, // Store the access code for "View Access Code" section
-          expiresAt: offlineExpiresAt ? new Date(offlineExpiresAt) : d.expiresAt
+          expiresAt: offlineExpiresAt ? new Date(offlineExpiresAt) : d.expiresAt,
+          status,
         } : d
       ));
     } catch (error) {
