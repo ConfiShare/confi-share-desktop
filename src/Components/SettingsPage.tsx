@@ -116,10 +116,10 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
             />
           </SettingsSection>
 
-          {/* About */}
-          <SettingsSection title="About">
+          {/* More Info */}
+          <SettingsSection title="More Info">
             <SettingsRow
-              title="About Confishare"
+              title="More Info"
               description="Confishare is a secure document viewer designed to give you trusted, controlled access to sensitive files across desktop devices."
             />
           </SettingsSection>
