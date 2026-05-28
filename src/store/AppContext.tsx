@@ -153,7 +153,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!doc.cdcContainer) return 'active';
 
     const unlocked = await drmService.isDocumentUnlocked(doc.id);
-    if (unlocked) return 'offline';
+    if (unlocked) return 'active';
     return doc.realDocId ? 'code_expired' : 'active';
   }, []);
 
@@ -203,7 +203,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const fileUrl = URL.createObjectURL(blob);
       const now = new Date();
       const status: DocumentStatus =
-        offlineExpiresAt && new Date(offlineExpiresAt) > now ? 'offline' : 'code_expired';
+        offlineExpiresAt && new Date(offlineExpiresAt) > now ? 'active' : 'code_expired';
 
       setDocuments(prev => prev.map(d => 
         d.id === docId ? { 
