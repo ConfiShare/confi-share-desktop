@@ -27,7 +27,7 @@ export function EnterAccessCodeModal() {
       return;
     }
     if (!doc) {
-      setError('Document not found because it was deleted by the owner.');
+      setError('Document not found because it was deleted by the owner');
       return;
     }
 
