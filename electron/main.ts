@@ -239,6 +239,18 @@ function createWindow() {
 
   // Allow screenshots and screen sharing/recording tools to capture the app window.
   win.setContentProtection(false)
+  // Listen for renderer requests to toggle content protection (prevent screenshots)
+  ipcMain.handle('window:set-content-protection', async (_event, enable: boolean) => {
+    try {
+      if (win) {
+        win.setContentProtection(Boolean(enable))
+      }
+      return true
+    } catch (err) {
+      console.error('Failed to set content protection:', err)
+      return false
+    }
+  })
 
   // Keep app-level zoom fixed; the document viewer controls zoom itself.
   win.webContents.setZoomFactor(1)

@@ -288,6 +288,46 @@ export function PdfViewer({ pdfData, fileName, onPageChange }: PdfViewerProps) {
     }
   }, [pdfDoc, onPageChange]);
 
+  // Prevent copying/screenshot shortcuts while PDF viewer is active
+  useEffect(() => {
+    function onCopy(e: ClipboardEvent) {
+      e.preventDefault()
+      try {
+        if (e.clipboardData) e.clipboardData.clearData()
+      } catch {}
+    }
+
+    function onCut(e: ClipboardEvent) {
+      e.preventDefault()
+    }
+
+    function onDragStart(e: DragEvent) {
+      e.preventDefault()
+    }
+
+    function onKeyDownCapture(e: KeyboardEvent) {
+      const ctrl = e.ctrlKey || e.metaKey
+      if (!ctrl) return
+      const blocked = ['c', 's', 'p']
+      if (blocked.includes(e.key.toLowerCase())) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
+
+    document.addEventListener('copy', onCopy, true)
+    document.addEventListener('cut', onCut, true)
+    document.addEventListener('dragstart', onDragStart, true)
+    document.addEventListener('keydown', onKeyDownCapture, true)
+
+    return () => {
+      document.removeEventListener('copy', onCopy, true)
+      document.removeEventListener('cut', onCut, true)
+      document.removeEventListener('dragstart', onDragStart, true)
+      document.removeEventListener('keydown', onKeyDownCapture, true)
+    }
+  }, [])
+
   // Keyboard navigation & Wheel controls
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (loading || !pdfDoc) return;

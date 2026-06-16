@@ -121,6 +121,50 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
   }
 
   useEffect(() => {
+    // Enable content protection while this viewer is active and block copy/drag events
+    try {
+      const wc = (window as unknown as Window & { windowControls?: { setContentProtection: (enable: boolean) => Promise<boolean> } }).windowControls
+      if (wc?.setContentProtection) {
+        wc.setContentProtection(true).catch((err) => {
+          console.debug('setContentProtection(enable) failed', err)
+        })
+      }
+    } catch (err) {
+      console.debug('Failed to request content protection (enable)', err)
+    }
+
+    function onCopy(e: ClipboardEvent) {
+      e.preventDefault()
+      try {
+        if (e.clipboardData) e.clipboardData.clearData()
+      } catch (err) {
+        console.debug('Failed to clear clipboard data', err)
+      }
+    }
+
+    function onCut(e: ClipboardEvent) {
+      e.preventDefault()
+    }
+
+    function onDragStart(e: DragEvent) {
+      e.preventDefault()
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      const ctrl = e.ctrlKey || e.metaKey
+      if (!ctrl) return
+      const blocked = ['c', 's', 'p']
+      if (blocked.includes(e.key.toLowerCase())) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
+
+    document.addEventListener('copy', onCopy, true)
+    document.addEventListener('cut', onCut, true)
+    document.addEventListener('dragstart', onDragStart, true)
+    document.addEventListener('keydown', onKeyDown, true)
+
     async function readDocumentBytesFromSource(): Promise<Uint8Array> {
       if (doc.fileUrl) {
         const response = await fetch(doc.fileUrl);
@@ -316,6 +360,21 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
     return () => {
       active = false;
       releaseGeneratedImageUrl();
+      try {
+        const wc = (window as unknown as Window & { windowControls?: { setContentProtection: (enable: boolean) => Promise<boolean> } }).windowControls
+        if (wc?.setContentProtection) {
+          wc.setContentProtection(false).catch((err) => {
+            console.debug('setContentProtection(disable) failed', err)
+          })
+        }
+      } catch (err) {
+        console.debug('Failed to request content protection (disable)', err)
+      }
+
+      document.removeEventListener('copy', onCopy, true)
+      document.removeEventListener('cut', onCut, true)
+      document.removeEventListener('dragstart', onDragStart, true)
+      document.removeEventListener('keydown', onKeyDown, true)
     };
   }, [
     doc.accessCode,
@@ -397,6 +456,10 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
               </div>
               <div
                 className="p-5 text-sm text-slate-800 leading-relaxed overflow-auto"
+                style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                onCopy={(e) => e.preventDefault()}
+                onCut={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
                 dangerouslySetInnerHTML={{ __html: officePreview.html }}
               />
             </div>

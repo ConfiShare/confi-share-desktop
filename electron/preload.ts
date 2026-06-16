@@ -62,6 +62,11 @@ contextBridge.exposeInMainWorld('drmApi', {
   convertToPdf: (docId: string, base64Data: string, originalName: string, originalMime: string) => ipcRenderer.invoke('drm:convert-office-to-pdf', docId, base64Data, originalName, originalMime),
 })
 
+// Allow renderer to request content protection toggling
+contextBridge.exposeInMainWorld('windowControls', {
+  setContentProtection: (enable: boolean) => ipcRenderer.invoke('window:set-content-protection', enable),
+})
+
 contextBridge.exposeInMainWorld('confiShare', {
   openFile: (path: string, passKey?: string) => ipcRenderer.invoke('open-cdc-file', path, passKey),
   closeSession: (sessionDir: string) => ipcRenderer.invoke('close-cdc-session', sessionDir),
