@@ -8,9 +8,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
-    "build:win": "tsc && vite build && electron-builder --win nsis",
-    "build:mac": "tsc && vite build && electron-builder --mac dmg",
-    "build:linux": "tsc && vite build && electron-builder --linux AppImage",
+    "build:win": "tsc && vite build && electron-builder --win nsis --publish never",
+    "build:mac": "tsc && vite build && electron-builder --mac dmg --publish never",
+    "build:linux": "tsc && vite build && electron-builder --linux AppImage --publish never",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
