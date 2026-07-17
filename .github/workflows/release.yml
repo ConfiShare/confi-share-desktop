@@ -42,10 +42,10 @@ jobs:
           name: confishare-windows-installer
           path: release/*/ConfiShare-*-Setup.exe
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
           files: release/*/ConfiShare-*-Setup.exe
           draft: false
           prerelease: false

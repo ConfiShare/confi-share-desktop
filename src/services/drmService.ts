@@ -1,6 +1,6 @@
 import type { CdcContainer } from '../types';
 
-const BASE_URL = 'https://confishare-api.onrender.com/api/v1';
+const BASE_URL = 'https://server.confishare.io/api/v1';
 
 export interface ActivationResponse {
   offlineToken: string;
