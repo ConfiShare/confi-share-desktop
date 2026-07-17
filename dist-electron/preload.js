@@ -1,2 +1,41 @@
-"use strict";const{contextBridge:c,ipcRenderer:n}=require("electron");c.exposeInMainWorld("ipcRenderer",{on(...e){const[o,t]=e;return n.on(o,(i,...r)=>t(i,...r))},off(...e){const[o,...t]=e;return n.off(o,...t)},send(...e){const[o,...t]=e;return n.send(o,...t)},invoke(...e){const[o,...t]=e;return n.invoke(o,...t)}});c.exposeInMainWorld("drmApi",{decryptCDC:(e,o)=>n.invoke("drm:decrypt-cdc",e,o),decryptPayload:(e,o)=>n.invoke("drm:decrypt-payload",e,o),setSecureData:(e,o,t)=>n.invoke("secure:set-data",e,o,t),getSecureData:(e,o)=>n.invoke("secure:get-data",e,o),removeDocData:e=>n.invoke("secure:remove-doc-data",e),saveList:e=>n.invoke("docs:save-list",e),loadList:()=>n.invoke("docs:load-list"),saveFileLocally:(e,o,t)=>n.invoke("docs:save-file-locally",e,o,t),readLocalFile:e=>n.invoke("docs:read-local-file",e),convertToPdf:(e,o,t,i)=>n.invoke("drm:convert-office-to-pdf",e,o,t,i)});c.exposeInMainWorld("windowControls",{setContentProtection:e=>n.invoke("window:set-content-protection",e)});c.exposeInMainWorld("confiShare",{openFile:(e,o)=>n.invoke("open-cdc-file",e,o),closeSession:e=>n.invoke("close-cdc-session",e)});
+const { contextBridge, ipcRenderer } = require("electron");
+contextBridge.exposeInMainWorld("ipcRenderer", {
+  on(...args) {
+    const [channel, listener] = args;
+    return ipcRenderer.on(channel, (event, ...args2) => listener(event, ...args2));
+  },
+  off(...args) {
+    const [channel, ...omit] = args;
+    return ipcRenderer.off(channel, ...omit);
+  },
+  send(...args) {
+    const [channel, ...omit] = args;
+    return ipcRenderer.send(channel, ...omit);
+  },
+  invoke(...args) {
+    const [channel, ...omit] = args;
+    return ipcRenderer.invoke(channel, ...omit);
+  }
+});
+contextBridge.exposeInMainWorld("drmApi", {
+  decryptCDC: (container, passKey) => ipcRenderer.invoke("drm:decrypt-cdc", container, passKey),
+  decryptPayload: (container, contentKey) => ipcRenderer.invoke("drm:decrypt-payload", container, contentKey),
+  setSecureData: (docId, key, value) => ipcRenderer.invoke("secure:set-data", docId, key, value),
+  getSecureData: (docId, key) => ipcRenderer.invoke("secure:get-data", docId, key),
+  removeDocData: (docId) => ipcRenderer.invoke("secure:remove-doc-data", docId),
+  // File & List Persistence
+  saveList: (documents) => ipcRenderer.invoke("docs:save-list", documents),
+  loadList: () => ipcRenderer.invoke("docs:load-list"),
+  saveFileLocally: (docId, fileName, arrayBuffer) => ipcRenderer.invoke("docs:save-file-locally", docId, fileName, arrayBuffer),
+  readLocalFile: (localPath) => ipcRenderer.invoke("docs:read-local-file", localPath),
+  convertToPdf: (docId, base64Data, originalName, originalMime) => ipcRenderer.invoke("drm:convert-office-to-pdf", docId, base64Data, originalName, originalMime)
+});
+contextBridge.exposeInMainWorld("windowControls", {
+  setContentProtection: (enable) => ipcRenderer.invoke("window:set-content-protection", enable)
+});
+contextBridge.exposeInMainWorld("confiShare", {
+  openFile: (path, passKey) => ipcRenderer.invoke("open-cdc-file", path, passKey),
+  closeSession: (sessionDir) => ipcRenderer.invoke("close-cdc-session", sessionDir)
+});
 //# sourceMappingURL=preload.js.map
+reload.js.map
