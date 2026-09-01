@@ -88,12 +88,12 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               description="Need help opening a document or renewing access? Our support team is here to help you"
             >
               <a
-                href="mailto:support@confishare.io"
+                href="mailto:info@confishare.io"
                 onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center font-medium justify-between gap-1.5 mt-2 text-sm text-[#059669] hover:text-green-700 transition-colors"
               >
                 <Mail className="w-5 h-5" />
-                support@confishare.io
+                info@confishare.io
               </a>
             </SettingsRow>
           </SettingsSection>

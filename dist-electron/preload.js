@@ -1,3 +1,4 @@
+"use strict";
 const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args) {
@@ -38,4 +39,3 @@ contextBridge.exposeInMainWorld("confiShare", {
   closeSession: (sessionDir) => ipcRenderer.invoke("close-cdc-session", sessionDir)
 });
 //# sourceMappingURL=preload.js.map
-reload.js.map

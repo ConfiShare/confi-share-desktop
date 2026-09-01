@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, ImageIcon, Loader2, ShieldAlert } from 'lucide-react';
+import { FileText, ImageIcon, Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { PdfViewer } from './PdfViewer';
+import { useApp } from '../store/AppContext';
 import type { ConfiDocument } from '../types';
 import {
   buildOfficePreview,
@@ -87,6 +88,7 @@ function uint8ArrayToBase64(uint8: Uint8Array): string {
 }
 
 export function DocumentViewer({ doc }: DocumentViewerProps) {
+  const { navigateTo } = useApp();
   const [viewerMode, setViewerMode] = useState<ViewerMode | null>(null);
   const [pdfData, setPdfData] = useState<Uint8Array | string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -397,6 +399,13 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
       {/* Dynamic Header */}
       <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => navigateTo('home')}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+            title="Back to document list"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           <span className="text-sm font-semibold text-gray-800 truncate max-w-md" title={doc.name}>
             {doc.name}
           </span>
