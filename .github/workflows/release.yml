@@ -77,8 +77,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci --omit=optional
-          npm install --no-save --omit=optional @rollup/rollup-darwin-arm64@4.57.1 lightningcss-darwin-arm64@1.30.2 @tailwindcss/oxide-darwin-arm64@4.1.18
+          # Do NOT use --omit=optional here: dmg-license is an optional darwin-only
+          # dep that the dmg target requires. npm already filters optional deps by
+          # platform, so the full install is correct on macOS.
+          npm ci
+          npm install --no-save @rollup/rollup-darwin-arm64@4.57.1 lightningcss-darwin-arm64@1.30.2 @tailwindcss/oxide-darwin-arm64@4.1.18
 
       - name: Verify signature setup
         run: |
