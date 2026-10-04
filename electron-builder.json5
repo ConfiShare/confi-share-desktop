@@ -14,9 +14,21 @@
   ],
   "mac": {
     "icon": "icon.png",
+    "category": "public.app-category.productivity",
     "target": [
-      "dmg"
+      {
+        "target": "dmg",
+        "arch": [
+          "arm64",
+          "x64"
+        ]
+      }
     ],
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+    "notarize": true,
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
   },
   "win": {

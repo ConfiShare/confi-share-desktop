@@ -1,7 +1,7 @@
 {
   "name": "confi-share-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Secure desktop app for sharing and viewing protected documents",
   "author": "ConfiShare",
   "type": "module",

@@ -50,6 +50,81 @@ jobs:
           draft: false
           prerelease: false
 
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Report signing status
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+        run: |
+          if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ]; then
+            echo "Signed + notarized build (secrets present)"
+          else
+            echo "Unsigned build - no Apple secrets configured."
+            echo "macOS will show a Gatekeeper warning; users must right-click > Open."
+          fi
+
+      - name: Install dependencies
+        run: |
+          npm ci --omit=optional
+          npm install --no-save --omit=optional @rollup/rollup-darwin-arm64@4.57.1 lightningcss-darwin-arm64@1.30.2 @tailwindcss/oxide-darwin-arm64@4.1.18
+
+      - name: Verify signature setup
+        run: |
+          security find-identity -v -p codesigning || true
+
+      - name: Build macOS app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run build:mac
+
+      - name: Verify build output
+        run: |
+          set -e
+          FOUND=0
+          for APP in release/*/mac*/ConfiShare.app; do
+            [ -d "$APP" ] || continue
+            FOUND=1
+            echo "::group::$APP"
+            codesign -dv --verbose=2 "$APP" 2>&1 | grep -E "Authority|TeamIdentifier|Signature|flags" || echo "  (ad-hoc / unsigned)"
+            echo "::endgroup::"
+          done
+          if [ "$FOUND" -eq 0 ]; then
+            echo "No .app bundle was produced"
+            exit 1
+          fi
+          ls -la release/*/*.dmg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: confishare-macos-dmg
+          path: release/*/ConfiShare-*-Installer.dmg
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
+          files: release/*/ConfiShare-*-Installer.dmg
+          draft: false
+          prerelease: false
+
   build-linux:
     runs-on: ubuntu-latest
 
