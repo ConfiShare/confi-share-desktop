@@ -97,10 +97,15 @@ jobs:
           npm ci
           npm install --no-save @rollup/rollup-darwin-arm64@4.57.1 lightningcss-darwin-arm64@1.30.2 @tailwindcss/oxide-darwin-arm64@4.1.18
 
-      - name: Build macOS app
+      - name: Build macOS app (arm64)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run build:mac
+        run: npx --no-install electron-builder --mac dmg --arm64 --publish never
+
+      - name: Build macOS app (x64)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --no-install electron-builder --mac dmg --x64 --publish never
 
       - name: Verify build output
         run: |
