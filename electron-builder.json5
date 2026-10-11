@@ -29,11 +29,11 @@
     "entitlements": "build/entitlements.mac.plist",
     "entitlementsInherit": "build/entitlements.mac.inherit.plist",
     "notarize": true,
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+    "artifactName": "${productName}-Mac-${version}-${arch}-Installer.${ext}"
   },
   "win": {
     "icon": "icon.ico",
-    "signAndEditExecutable": false,
+    "signAndEditExecutable": true,
     "verifyUpdateCodeSignature": false,
     "target": [
       {
@@ -54,6 +54,7 @@
     "uninstallerIcon": "build/icon.ico"
   },
   "linux": {
+    "icon": "icon.png",
     "target": [
       "AppImage"
     ],
