@@ -63,7 +63,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Configure Apple signing
+      - name: Preflight Apple signing configuration
         env:
           CERT_P12: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
           CERT_PW: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
@@ -71,23 +71,25 @@ jobs:
           APPLE_PW: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          # Unset secrets resolve to an EMPTY STRING in Actions, and electron-builder
-          # treats an empty CSC_LINK as a certificate *path*, which resolves to the
-          # project dir and fails with "not a file". So only export the vars when
-          # the certificate is actually configured.
-          if [ -n "$CERT_P12" ] && [ -n "$CERT_PW" ] && \
-             [ -n "$APPLE_ID" ] && [ -n "$APPLE_PW" ] && [ -n "$TEAM_ID" ]; then
-            {
-              echo "CSC_LINK=$CERT_P12"
-              echo "CSC_KEY_PASSWORD=$CERT_PW"
-              echo "APPLE_ID=$APPLE_ID"
-              echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_PW"
-              echo "APPLE_TEAM_ID=$TEAM_ID"
-            } >> "$GITHUB_ENV"
-            echo "Signed + notarized build configured"
-          else
-            echo "::warning::Apple signing secrets missing - building unsigned. macOS will show a Gatekeeper warning."
+          set -e
+          MISSING=0
+          [ -n "$CERT_P12" ] || { echo "::error::Missing secret MAC_CERTIFICATE_P12_BASE64"; MISSING=1; }
+          [ -n "$CERT_PW" ] || { echo "::error::Missing secret MAC_CERTIFICATE_PASSWORD"; MISSING=1; }
+          [ -n "$APPLE_ID" ] || { echo "::error::Missing secret APPLE_ID"; MISSING=1; }
+          [ -n "$APPLE_PW" ] || { echo "::error::Missing secret APPLE_APP_SPECIFIC_PASSWORD"; MISSING=1; }
+          [ -n "$TEAM_ID" ] || { echo "::error::Missing secret APPLE_TEAM_ID"; MISSING=1; }
+          if [ "$MISSING" -eq 1 ]; then
+            echo "::error::All Apple signing/notarization secrets are required for production macOS releases (cert p12 + password + Apple ID + app-specific password + Team ID)."
+            exit 1
           fi
+          {
+            echo "CSC_LINK=$CERT_P12"
+            echo "CSC_KEY_PASSWORD=$CERT_PW"
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_PW"
+            echo "APPLE_TEAM_ID=$TEAM_ID"
+          } >> "$GITHUB_ENV"
+          echo "Signed + notarized build configured"
 
       - name: Install dependencies
         run: |
@@ -107,22 +109,48 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx --no-install electron-builder --mac dmg --x64 --publish never
 
-      - name: Verify build output
+      - name: Verify signing, notarization, and staple
         run: |
           set -e
-          FOUND=0
+          FOUND_APP=0
+          FOUND_DMG=0
           for APP in release/*/mac*/ConfiShare.app; do
             [ -d "$APP" ] || continue
-            FOUND=1
-            echo "::group::$APP"
-            codesign -dv --verbose=2 "$APP" 2>&1 | grep -E "Authority|TeamIdentifier|Signature|flags" || echo "  (ad-hoc / unsigned)"
+            FOUND_APP=1
+            echo "::group::codesign (strict) $APP"
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            echo "---"
+            codesign -dv --verbose=4 "$APP" 2>&1 | grep -E "Authority|TeamIdentifier|Identifier|format|flags|Sealed Resources"
+            echo "::endgroup::"
+            echo "::group::spctl $APP"
+            spctl --assess --type execute --verbose=4 "$APP"
+            echo "::endgroup::"
+            echo "::group::stapler $APP"
+            xcrun stapler validate "$APP"
             echo "::endgroup::"
           done
-          if [ "$FOUND" -eq 0 ]; then
-            echo "No .app bundle was produced"
+          if [ "$FOUND_APP" -eq 0 ]; then
+            echo "::error::No .app bundle was produced"
             exit 1
           fi
-          ls -la release/*/*.dmg
+          for DMG in release/*/ConfiShare-*-Installer.dmg; do
+            [ -f "$DMG" ] || continue
+            FOUND_DMG=1
+            echo "::group::hdiutil verify $DMG"
+            hdiutil verify "$DMG"
+            echo "::endgroup::"
+            echo "::group::stapler $DMG"
+            xcrun stapler validate "$DMG" || true
+            echo "::endgroup::"
+            echo "::group::spctl $DMG"
+            spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG" 2>&1 | tail -20 || true
+            echo "::endgroup::"
+          done
+          if [ "$FOUND_DMG" -eq 0 ]; then
+            echo "::error::No DMG was produced"
+            exit 1
+          fi
+          ls -lh release/*/ConfiShare-*-Installer.dmg release/*/mac*/ConfiShare.app
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
