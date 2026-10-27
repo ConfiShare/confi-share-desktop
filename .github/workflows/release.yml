@@ -109,6 +109,23 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx --no-install electron-builder --mac dmg --x64 --publish never
 
+      - name: Notarize and staple macOS DMGs
+        run: |
+          set -e
+          for DMG in release/*/ConfiShare-Mac-*-Installer.dmg; do
+            [ -f "$DMG" ] || continue
+            echo "::group::Notarize $DMG"
+            xcrun notarytool submit "$DMG" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+            echo "::endgroup::"
+            echo "::group::Staple $DMG"
+            xcrun stapler staple "$DMG"
+            echo "::endgroup::"
+          done
+
       - name: Verify signing, notarization, and staple
         run: |
           set -e
@@ -140,10 +157,10 @@ jobs:
             hdiutil verify "$DMG"
             echo "::endgroup::"
             echo "::group::stapler $DMG"
-            xcrun stapler validate "$DMG" || true
+            xcrun stapler validate "$DMG"
             echo "::endgroup::"
             echo "::group::spctl $DMG"
-            spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG" 2>&1 | tail -20 || true
+            spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG"
             echo "::endgroup::"
           done
           if [ "$FOUND_DMG" -eq 0 ]; then
