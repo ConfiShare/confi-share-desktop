@@ -1,11 +1,22 @@
 import { useState } from 'react';
-import { Search, Plus, MoreHorizontal } from 'lucide-react';
+import { Search, Plus, MoreHorizontal, /* Activity, */ LogOut } from 'lucide-react';
 import { useApp } from '../store/AppContext';
+import { useAuth } from '../store/authContext';
+import { featureFlags } from '../config/featureFlags';
 import { DocumentListItem } from './DocumentListItem';
+
+/** "Ada Lovelace" → "AL"; falls back to the first letter of the email. */
+function getInitials(fullName: string | undefined, email: string): string {
+  const parts = (fullName ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (email[0] ?? '?').toUpperCase();
+}
 
 export function Sidebar() {
   const { filteredDocuments, searchQuery, setSearchQuery, openModal, navigateTo, activeView } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { user, logout } = useAuth();
 
   function handleImport() {
     openModal({ type: 'import_choose' });
@@ -89,6 +100,21 @@ export function Sidebar() {
           <Plus className="w-6 h-6" />
           Import document
         </button>
+        {/* Shared file tracking is shown in the web app, not the desktop app.
+        {featureFlags.trackingPreview && (
+          <button
+            onClick={() => navigateTo('tracking')}
+            className={`w-full flex items-center gap-2 cursor-pointer py-2.5 px-3 rounded-xl transition-colors text-sm font-medium ${
+              activeView === 'tracking'
+                ? 'bg-gray-100 text-gray-900'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Activity className="w-6 h-6" />
+            Shared file tracking
+          </button>
+        )}
+        */}
         <button
           onClick={handleSettings}
           className={`w-full flex items-center gap-2 cursor-pointer py-2.5 px-3 rounded-xl transition-colors text-sm font-medium ${
@@ -100,6 +126,40 @@ export function Sidebar() {
           <MoreHorizontal className="w-6 h-6" />
           About ConfiShare
         </button>
+        {featureFlags.authPreview && user && (
+          <div className="flex items-center gap-3 pt-3 mt-1 border-t border-gray-100 px-1">
+            {/* Signed-in user: avatar with initials, name and email */}
+            <div
+              className="w-9 h-9 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm font-semibold"
+              aria-hidden="true"
+            >
+              {getInitials(user.fullName, user.email)}
+            </div>
+            <div className="flex-1 min-w-0" title={`Signed in as ${user.email}`}>
+              <p className="text-sm font-medium text-gray-900 truncate">{user.fullName || user.email}</p>
+              {user.fullName && <p className="text-xs text-gray-500 truncate">{user.email}</p>}
+            </div>
+            <button
+              onClick={() => {
+                if (
+                  !navigator.onLine &&
+                  !window.confirm(
+                    'You are offline. After signing out you will need an internet connection to sign in again and view your documents. Sign out anyway?'
+                  )
+                ) {
+                  return;
+                }
+                navigateTo('home');
+                void logout();
+              }}
+              title="Sign out"
+              aria-label="Sign out"
+              className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg cursor-pointer transition-colors text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

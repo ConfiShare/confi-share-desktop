@@ -42,3 +42,66 @@ export interface ModalState {
     failedCount: number;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Shared-file tracking: UI view models mapped from the API
+// (GET /drm recipients, GET /audit-log entries) in services/trackingService.ts
+// ---------------------------------------------------------------------------
+
+export type DocumentAccessMode = 'open' | 'restricted';
+
+export type TrackingStatus =
+  | 'shared'
+  | 'opened'
+  | 'activated'
+  | 'expired'
+  | 'access_denied';
+
+export type TrackingActivityType =
+  | 'shared'
+  | 'opened'
+  | 'activated'
+  | 'expired'
+  | 'access_denied'
+  | 'revoked';
+
+export interface TrackingRecipient {
+  name?: string;
+  email: string;
+}
+
+export interface SharedDocumentRecord {
+  id: string;
+  docId: string;
+  documentName: string;
+  accessMode?: DocumentAccessMode;
+  recipient: TrackingRecipient;
+  sharedAt: Date;
+  status: TrackingStatus;
+  lastActivityAt?: Date;
+  lastActivityType?: TrackingActivityType;
+}
+
+export interface DocumentActivity {
+  id: string;
+  recipientEmail: string;
+  type: TrackingActivityType;
+  occurredAt: Date;
+  /** Document status immediately after this activity. */
+  statusAfter: TrackingStatus;
+  actorName?: string;
+  /** Ready-to-show sentence from the audit log. */
+  summary?: string;
+  deviceId?: string;
+  ip?: string;
+}
+
+export interface DocumentTrackingDetail {
+  record: SharedDocumentRecord;
+  fileType?: string;
+  sizeKb?: number;
+  lastOpenedAt?: Date;
+  lastActivatedAt?: Date;
+  /** Newest first. */
+  activity: DocumentActivity[];
+}

@@ -1,6 +1,6 @@
 import type { CdcContainer } from '../types';
-
-const BASE_URL = 'https://server.confishare.io/api/v1';
+import { ApiError, apiRequest, unwrapData } from './apiClient';
+import { getDeviceId } from './deviceId';
 
 export interface ActivationResponse {
   offlineToken: string;
@@ -17,18 +17,69 @@ interface DecryptedDocumentData {
   [key: string]: unknown;
 }
 
-type DrmUnlockErrorKind = 'invalid_access_code' | 'access_revoked' | 'activation_failed';
+type DrmUnlockErrorKind =
+  | 'invalid_access_code'
+  | 'access_revoked'
+  | 'activation_failed'
+  // Viewer access control (403 ACCESS_DENIED data.code / 401)
+  | 'auth_required'
+  | 'email_otp_required'
+  | 'invalid_email_otp'
+  | 'not_a_recipient'
+  | 'session_expired';
 
 export class DrmUnlockError extends Error {
   kind: DrmUnlockErrorKind;
   status?: number;
+  /** For email_otp_required: where the 5-digit code was sent (data.email). */
+  email?: string;
 
-  constructor(kind: DrmUnlockErrorKind, message: string, status?: number) {
+  constructor(kind: DrmUnlockErrorKind, message: string, status?: number, email?: string) {
     super(message);
     this.name = 'DrmUnlockError';
     this.kind = kind;
     this.status = status;
+    this.email = email;
   }
+}
+
+/** Map an Activate failure to DrmUnlockError, branching on data.code (never on message). */
+function toActivationError(error: ApiError): DrmUnlockError {
+  const { status, message } = error;
+
+  if (status === 401) {
+    return new DrmUnlockError('session_expired', 'Your session has expired. Please sign in again.', status);
+  }
+
+  if (error.error === 'ACCESS_DENIED') {
+    switch (error.code) {
+      case 'AUTH_REQUIRED':
+        return new DrmUnlockError('auth_required', 'Sign in to ConfiShare to open this document.', status);
+      case 'EMAIL_OTP_REQUIRED':
+        return new DrmUnlockError(
+          'email_otp_required',
+          message,
+          status,
+          typeof error.data?.email === 'string' ? error.data.email : undefined
+        );
+      case 'INVALID_EMAIL_OTP':
+        return new DrmUnlockError('invalid_email_otp', message, status);
+      case 'NOT_A_RECIPIENT':
+        return new DrmUnlockError(
+          'not_a_recipient',
+          "This document wasn't shared with your account. Sign in with the email address it was sent to.",
+          status
+        );
+      case 'RECIPIENT_REVOKED':
+        return new DrmUnlockError('access_revoked', 'Access to this document has been revoked by the owner.', status);
+    }
+  }
+
+  // Previous behaviour for everything else.
+  if (status === 403 || status === 410 || isRevocationMessage(message)) {
+    return new DrmUnlockError('access_revoked', 'Access to this document has been revoked by the owner.', status);
+  }
+  return new DrmUnlockError('activation_failed', message || 'Failed to activate document', status);
 }
 
 function isRevocationMessage(message: string): boolean {
@@ -58,38 +109,24 @@ export function isAccessRevokedError(error: unknown): boolean {
 
 export const drmService = {
   /**
-   * Calls the backend activation endpoint to get an offline token.
+   * POST /drm/activate { docId, passKey, deviceId, otp? } to get an offline token.
+   * Sends `Authorization: Bearer` when the user is signed in, so the open is
+   * recorded in the owner's audit log under their account.
    */
-  async activate(docId: string, passKey: string): Promise<ActivationResponse> {
-    const response = await fetch(`${BASE_URL}/drm/activate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ docId, passKey }),
-    });
-
-    const result = await response.json().catch(() => ({} as Record<string, unknown>));
-
-    if (!response.ok) {
-      const message =
-        typeof result.message === 'string' && result.message.trim()
-          ? result.message
-          : 'Failed to activate document';
-
-      if (response.status === 403 || response.status === 410 || isRevocationMessage(message)) {
-        throw new DrmUnlockError(
-          'access_revoked',
-          'Access to this document has been revoked by the owner.',
-          response.status
-        );
-      }
-
-      throw new DrmUnlockError('activation_failed', message, response.status);
+  async activate(docId: string, passKey: string, otp?: string): Promise<ActivationResponse> {
+    const deviceId = await getDeviceId();
+    try {
+      const body = await apiRequest('/drm/activate', {
+        method: 'POST',
+        auth: 'optional',
+        body: { docId, passKey, ...(deviceId ? { deviceId } : {}), ...(otp ? { otp } : {}) },
+      });
+      // Backend returns { message: "...", data: { ... } }
+      return unwrapData<ActivationResponse>(body);
+    } catch (error) {
+      if (error instanceof ApiError) throw toActivationError(error);
+      throw error;
     }
-
-    // Backend returns { message: "...", data: { ... } }
-    return result.data as ActivationResponse;
   },
 
   /**
@@ -100,7 +137,8 @@ export const drmService = {
   async unlockDocument(
     docId: string,
     container: CdcContainer,
-    passKey: string
+    passKey: string,
+    options?: { otp?: string }
   ): Promise<{ decryptedData: DecryptedDocumentData; realDocId: string; offlineExpiresAt?: string }> {
     if (!window.drmApi) {
       console.error('window.drmApi is undefined. Preload script may have failed to load.');
@@ -145,8 +183,11 @@ export const drmService = {
     console.log('Token invalid or missing, activating with backend...');
     let activation: ActivationResponse;
     try {
-      activation = await this.activate(realDocId, passKey);
+      activation = await this.activate(realDocId, passKey, options?.otp);
     } catch (error) {
+      if (error instanceof DrmUnlockError && error.kind !== 'access_revoked' && error.kind !== 'activation_failed') {
+        throw error; // viewer access-control outcomes are handled by the UI
+      }
       if (isAccessRevokedError(error)) {
         throw new DrmUnlockError(
           'access_revoked',

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import type { ConfiDocument, ModalState, DocumentStatus } from '../types';
 import { drmService } from '../services/drmService';
 
-export type ActiveView = 'home' | 'document' | 'settings';
+export type ActiveView = 'home' | 'document' | 'settings' | 'tracking';
 
 interface AppContextValue {
   documents: ConfiDocument[];
@@ -18,7 +18,7 @@ interface AppContextValue {
   activeView: ActiveView;
   activeDocumentId: string | null;
   navigateTo: (view: ActiveView, docId?: string) => void;
-  unlockDocument: (docId: string, passKey: string) => Promise<void>;
+  unlockDocument: (docId: string, passKey: string, options?: { otp?: string }) => Promise<void>;
   markDocumentRevoked: (docId: string) => void;
 }
 
@@ -185,12 +185,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('online', handleOnline);
   }, [refreshStatuses]);
 
-  const unlockDocument = useCallback(async (docId: string, passKey: string) => {
+  const unlockDocument = useCallback(async (docId: string, passKey: string, options?: { otp?: string }) => {
     const doc = getDocumentById(docId);
     if (!doc || !doc.cdcContainer) throw new Error('Document not found or not a protected file');
 
     try {
-      const { decryptedData, realDocId, offlineExpiresAt } = await drmService.unlockDocument(docId, doc.cdcContainer, passKey);
+      const { decryptedData, realDocId, offlineExpiresAt } = await drmService.unlockDocument(docId, doc.cdcContainer, passKey, options);
       
       // decryptedData.file is base64
       const byteCharacters = atob(decryptedData.file);

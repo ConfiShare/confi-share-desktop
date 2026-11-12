@@ -74,25 +74,38 @@ function formatFileSize(sizeInBytes: number): string {
   return sizeInKb < 1 ? '<1 kb' : `${sizeInKb} kb`;
 }
 
+/** How many zips deep we look for .cdc files (zip inside zip inside zip...). */
+const MAX_ZIP_DEPTH = 5;
+
+/**
+ * Collects every .cdc file in a zip, including .cdc files inside zips that
+ * are nested in it (a zip of zips), up to MAX_ZIP_DEPTH levels.
+ */
 async function extractCdcFilesFromZip(zipFile: File): Promise<File[]> {
-  const zip = await JSZip.loadAsync(await zipFile.arrayBuffer());
+  const lastModified = zipFile.lastModified || Date.now();
+  const found: File[] = [];
 
-  const cdcEntries = Object.values(zip.files).filter(
-    (entry) => !entry.dir && entry.name.toLowerCase().endsWith('.cdc')
-  );
+  async function walk(data: ArrayBuffer, depth: number): Promise<void> {
+    const zip = await JSZip.loadAsync(data);
+    for (const entry of Object.values(zip.files)) {
+      if (entry.dir) continue;
+      const lowerName = entry.name.toLowerCase();
+      // Skip macOS metadata entries (__MACOSX/._file.cdc)
+      if (lowerName.startsWith('__macosx/') || lowerName.split('/').pop()?.startsWith('._')) continue;
 
-  return Promise.all(
-    cdcEntries.map(async (entry, index) => {
-      const buffer = await entry.async('arraybuffer');
-      const baseName =
-        entry.name.split('/').filter(Boolean).pop() ?? `document-${index + 1}.cdc`;
+      if (lowerName.endsWith('.cdc')) {
+        const buffer = await entry.async('arraybuffer');
+        const baseName =
+          entry.name.split('/').filter(Boolean).pop() ?? `document-${found.length + 1}.cdc`;
+        found.push(new File([buffer], baseName, { type: 'application/json', lastModified }));
+      } else if (lowerName.endsWith('.zip') && depth < MAX_ZIP_DEPTH) {
+        await walk(await entry.async('arraybuffer'), depth + 1);
+      }
+    }
+  }
 
-      return new File([buffer], baseName, {
-        type: 'application/json',
-        lastModified: zipFile.lastModified || Date.now(),
-      });
-    })
-  );
+  await walk(await zipFile.arrayBuffer(), 1);
+  return found;
 }
 
 async function createDocumentFromFile(file: File): Promise<ConfiDocument> {

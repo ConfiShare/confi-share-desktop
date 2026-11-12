@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, ImageIcon, Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { FileText, ImageIcon, Loader2, ShieldAlert, ArrowLeft, History } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { PdfViewer } from './PdfViewer';
 import { useApp } from '../store/AppContext';
+import { featureFlags } from '../config/featureFlags';
+import { DocumentActivityPanel } from './tracking/DocumentActivityPanel';
 import type { ConfiDocument } from '../types';
 import {
   buildOfficePreview,
@@ -53,7 +55,61 @@ function isImageFile(fileName: string, mimeType: string): boolean {
   return Boolean(getImageMimeFromFileName(fileName));
 }
 
+/**
+ * For .cdc documents the real file type is inside the container (meta.mime /
+ * meta.originalName). The type of the imported .cdc file itself is meaningless
+ * ('' / application/json / application/octet-stream), so never use it.
+ */
+function getCdcMeta(doc: ConfiDocument): { mime: string; originalName: string } | null {
+  if (!doc.cdcContainer) return null;
+  const meta = doc.cdcContainer.meta as unknown as Record<string, unknown>;
+  const mime = typeof meta.mime === 'string' ? meta.mime : '';
+  const nameField = [meta.originalName, meta.fileName, meta.name, meta.filename].find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0
+  );
+  return { mime, originalName: nameField ?? '' };
+}
+
+/** File name used to decide how to render (the original name for .cdc documents). */
+function resolveViewName(doc: ConfiDocument): string {
+  return getCdcMeta(doc)?.originalName || doc.name;
+}
+
+function isPdfBytes(bytes: Uint8Array): boolean {
+  // "%PDF-" usually at byte 0, but the spec allows junk before it (first 1 KB).
+  const limit = Math.min(bytes.length - 5, 1024);
+  for (let i = 0; i <= limit; i += 1) {
+    if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46 && bytes[i + 4] === 0x2d) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isZipBytes(bytes: Uint8Array): boolean {
+  return bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+}
+
+/** True only for real text (no NUL bytes, valid UTF-8), so binary files are never shown as text. */
+function looksLikeText(bytes: Uint8Array): boolean {
+  const sample = bytes.subarray(0, Math.min(bytes.length, 8192));
+  if (sample.includes(0)) return false;
+  // The sample may end in the middle of a multi-byte character; allow up to 3 trailing bytes.
+  for (let trim = 0; trim <= 3 && trim < sample.length; trim += 1) {
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(sample.subarray(0, sample.length - trim));
+      return true;
+    } catch {
+      // try a shorter sample
+    }
+  }
+  return false;
+}
+
 function resolveKnownMimeType(doc: ConfiDocument): string {
+  const cdcMime = getCdcMeta(doc)?.mime;
+  if (cdcMime) return cdcMime;
+
   const fromBlob = doc.fileObject?.type ?? '';
   if (fromBlob) return fromBlob;
 
@@ -95,13 +151,17 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
   const [officePreview, setOfficePreview] = useState<OfficePreviewData | null>(null);
   const [isConverting, setIsConverting] = useState<boolean>(false);
   const [conversionError, setConversionError] = useState<string | null>(null);
+  const [showActivity, setShowActivity] = useState(false);
+  // Opens are recorded server-side by POST /drm/activate (sent with the
+  // signed-in user's token in drmService), so nothing to report here.
   const currentDocIdRef = useRef<string | null>(null);
   const generatedImageUrlRef = useRef<string | null>(null);
 
   const mimeType = resolveKnownMimeType(doc);
-  const shouldRenderAsPdf = isPdfFile(doc.name, mimeType);
-  const shouldRenderAsImage = isImageFile(doc.name, mimeType);
-  const shouldRenderAsDirectOfficePreview = isDirectOfficePreviewType(doc.name, mimeType);
+  const viewName = resolveViewName(doc);
+  const shouldRenderAsPdf = isPdfFile(viewName, mimeType);
+  const shouldRenderAsImage = isImageFile(viewName, mimeType);
+  const shouldRenderAsDirectOfficePreview = isDirectOfficePreviewType(viewName, mimeType);
 
   function releaseGeneratedImageUrl() {
     if (generatedImageUrlRef.current) {
@@ -203,11 +263,72 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
     setViewerMode(null);
     releaseGeneratedImageUrl();
 
+    function isStale() {
+      return !active || currentDocIdRef.current !== doc.id;
+    }
+
+    function showImage(bytes: Uint8Array, imageMime: string) {
+      const objectUrl = URL.createObjectURL(new Blob([Uint8Array.from(bytes)], { type: imageMime }));
+      generatedImageUrlRef.current = objectUrl;
+      setViewerMode('image');
+      setImageUrl(objectUrl);
+    }
+
+    /**
+     * .cdc documents: decrypt once, then pick the viewer from the real content
+     * (file signature first, then the type/name stored in the container).
+     */
+    async function loadCdcPreview() {
+      const bytes = await readDocumentBytesFromSource();
+      if (isStale()) return;
+
+      if (isPdfBytes(bytes)) {
+        setViewerMode('pdf');
+        setPdfData(bytes);
+        return;
+      }
+
+      const imageMime =
+        detectImageMimeFromBytes(bytes) ??
+        (shouldRenderAsImage ? mimeType || getImageMimeFromFileName(viewName) : null);
+      if (imageMime) {
+        showImage(bytes, imageMime);
+        return;
+      }
+
+      // Word / Excel / PowerPoint / OpenDocument / CSV / text: built-in preview.
+      // Text preview only for real text, so binary content is never shown as characters.
+      if (isZipBytes(bytes) || shouldRenderAsDirectOfficePreview || looksLikeText(bytes)) {
+        try {
+          const preview = await buildOfficePreview(bytes, viewName, mimeType);
+          if (isStale()) return;
+          if (preview) {
+            setViewerMode('office');
+            setOfficePreview(preview);
+            return;
+          }
+        } catch (previewErr) {
+          console.warn('[Viewer] Built-in preview failed, trying PDF conversion:', previewErr);
+        }
+      }
+
+      // Everything else (e.g. old .doc / .xls / .ppt): convert to PDF.
+      const pdfBytes = await window.drmApi.convertToPdf(doc.id, uint8ArrayToBase64(bytes), viewName, mimeType);
+      if (isStale()) return;
+      setViewerMode('pdf');
+      setPdfData(pdfBytes);
+    }
+
     async function loadDocumentPreview() {
       setIsConverting(true);
       setConversionError(null);
 
       try {
+        if (doc.cdcContainer) {
+          await loadCdcPreview();
+          return;
+        }
+
         if (shouldRenderAsImage) {
           if (doc.fileUrl) {
             if (!active || currentDocIdRef.current !== doc.id) return;
@@ -389,6 +510,7 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
     shouldRenderAsDirectOfficePreview,
     shouldRenderAsImage,
     shouldRenderAsPdf,
+    viewName,
   ]);
 
   return (
@@ -406,16 +528,35 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <span className="text-sm font-semibold text-gray-800 truncate max-w-md" title={doc.name}>
-            {doc.name}
+          <span className="text-sm font-semibold text-gray-800 truncate max-w-md" title={viewName}>
+            {viewName}
           </span>
           <StatusBadge status={doc.status} />
         </div>
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100 px-3 py-1 rounded-full select-none">
-          Secure Reader Mode
+        <div className="flex items-center gap-2 shrink-0">
+          {featureFlags.trackingPreview && (
+            <button
+              type="button"
+              onClick={() => setShowActivity((v) => !v)}
+              aria-pressed={showActivity}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full cursor-pointer transition-colors ${
+                showActivity
+                  ? 'bg-emerald-50 text-[#059669]'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+              title="Show tracking and activity history"
+            >
+              <History className="w-3.5 h-3.5" />
+              Activity
+            </button>
+          )}
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100 px-3 py-1 rounded-full select-none">
+            Secure Reader Mode
+          </div>
         </div>
       </div>
 
+      <div className="flex-1 flex relative overflow-hidden min-h-0">
       {/* Main Content Area */}
       <div className="flex-1 relative overflow-hidden bg-[#475569]/90">
         {isConverting ? (
@@ -483,6 +624,12 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
             <p className="text-sm font-medium">Unable to render document</p>
           </div>
         )}
+      </div>
+
+      {/* Tracking & activity history (UI preview, sample data) */}
+      {featureFlags.trackingPreview && showActivity && (
+        <DocumentActivityPanel doc={doc} onClose={() => setShowActivity(false)} />
+      )}
       </div>
     </div>
   );

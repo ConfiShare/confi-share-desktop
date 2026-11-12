@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
+import { buildRichDocxPreview, buildRichPptxPreview } from './officeRichPreview';
 
 type PreviewFormat =
   | 'docx'
@@ -552,6 +553,16 @@ export function detectImageMimeFromBytes(fileBytes: Uint8Array): string | null {
   return null;
 }
 
+/** Formatting-faithful renderer first (officeRichPreview.ts); null → the simple preview below is used. */
+async function tryRichPreview(build: () => Promise<OfficePreviewData | null>): Promise<OfficePreviewData | null> {
+  try {
+    return await build();
+  } catch (error) {
+    console.warn('[officePreview] formatted preview failed, using simple preview:', error);
+    return null;
+  }
+}
+
 export async function buildOfficePreview(
   fileBytes: Uint8Array,
   fileName: string,
@@ -561,9 +572,13 @@ export async function buildOfficePreview(
   if (!format) return null;
 
   try {
-    if (format === 'docx') return await buildDocxPreview(fileBytes, fileName);
+    if (format === 'docx') {
+      return (await tryRichPreview(() => buildRichDocxPreview(fileBytes, fileName))) ?? (await buildDocxPreview(fileBytes, fileName));
+    }
     if (format === 'xlsx') return await buildXlsxPreview(fileBytes, fileName);
-    if (format === 'pptx') return await buildPptxPreview(fileBytes, fileName);
+    if (format === 'pptx') {
+      return (await tryRichPreview(() => buildRichPptxPreview(fileBytes, fileName))) ?? (await buildPptxPreview(fileBytes, fileName));
+    }
     if (format === 'odt') return await buildOdtPreview(fileBytes, fileName);
     if (format === 'ods') return await buildOdsPreview(fileBytes, fileName);
     if (format === 'odp') return await buildOdpPreview(fileBytes, fileName);
