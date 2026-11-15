@@ -1,0 +1,67 @@
+// Mac App Store build configuration.
+//
+// This file is intentionally separate from electron-builder.json5 so the
+// Developer ID DMG release setup (hardened runtime + notarization + DMG
+// signing) is never reused for App Store builds.
+//
+// Distribution build (upload to App Store Connect):
+//   CSC_LINK=/path/to/mas-distribution.p12 \
+//   CSC_KEY_PASSWORD=... \
+//   npm run build:mas
+//
+// Local sandbox test build (runnable on macOS, signed with Apple Development):
+//   CSC_LINK=/path/to/mas-development.p12 \
+//   CSC_KEY_PASSWORD=... \
+//   npm run build:mas:dev
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.confishare.desktop",
+  "asar": true,
+  "productName": "ConfiShare",
+  "directories": {
+    "output": "release-mas/${version}",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist",
+    "dist-electron"
+  ],
+  "mac": {
+    "icon": "icon.png",
+    "category": "public.app-category.productivity",
+    "minimumSystemVersion": "12.0",
+    "target": [
+      {
+        "target": "mas",
+        "arch": [
+          "universal"
+        ]
+      }
+    ],
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false,
+    "notarize": false,
+    "artifactName": "${productName}-Mac-AppStore-${version}-${arch}.${ext}"
+  },
+  "mas": {
+    "appId": "com.confishare.desktop",
+    "helperBundleId": "com.confishare.desktop.helper",
+    "type": "distribution",
+    "hardenedRuntime": false,
+    "notarize": false,
+    "entitlements": "build/entitlements.mas.plist",
+    "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+    "provisioningProfile": "build/embedded.provisionprofile",
+    "artifactName": "${productName}-Mac-AppStore-${version}-${arch}.${ext}"
+  },
+  "masDev": {
+    "appId": "com.confishare.desktop",
+    "helperBundleId": "com.confishare.desktop.helper",
+    "type": "development",
+    "hardenedRuntime": false,
+    "notarize": false,
+    "entitlements": "build/entitlements.mas.plist",
+    "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+    "provisioningProfile": "build/embedded.dev.provisionprofile"
+  }
+}

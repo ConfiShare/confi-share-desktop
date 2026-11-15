@@ -10,6 +10,10 @@
     "build": "tsc && vite build && electron-builder",
     "build:win": "tsc && vite build && electron-builder --win nsis --publish never",
     "build:mac": "tsc && vite build && electron-builder --mac --publish never",
+    "build:mas": "npm run mas:preflight && tsc && vite build && electron-builder --config electron-builder-mas.json5 --mac mas --universal --publish never",
+    "build:mas:dev": "npm run mas:preflight -- --dev && tsc && vite build && electron-builder --config electron-builder-mas.json5 --mac mas-dev --universal --publish never",
+    "mas:preflight": "node scripts/mas-preflight.mjs",
+    "validate:mas": "bash scripts/validate-mas-build.sh",
     "build:linux": "tsc && vite build && electron-builder --linux AppImage --publish never",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { spawn } from 'child_process';
 import { decryptCDCContainer } from './crypto.js';
+import { createMasOfficeConversionError, isMacAppStoreBuild } from './runtime.js';
 
 const TEMP_DIR = path.join(app.getPath('temp'), 'confi-share');
 const activeSessions = new Set<string>();
@@ -13,6 +14,10 @@ const activeSessions = new Set<string>();
  * No system path lookup, fallbacks or external redirects are used.
  */
 export function getSofficePath(): string {
+  if (isMacAppStoreBuild()) {
+    throw createMasOfficeConversionError();
+  }
+
   const platform = process.platform;
   const execName = platform === 'win32' ? 'soffice.exe' : 'soffice';
   const subPath = path.join('libreoffice', 'program', execName);
@@ -388,6 +393,12 @@ export async function openCDCFile(filePath: string, passKey?: string): Promise<{
   const type = detectFileType(fileBuffer, originalMime, originalName);
   console.log(`[documentProcessor] Detected type: ${type}`);
 
+  // The App Store build cannot launch LibreOffice. Do not write unsupported
+  // source bytes to disk when we already know the pipeline cannot complete.
+  if (isMacAppStoreBuild() && type !== 'pdf' && !CDC_IMAGE_TYPES.has(type)) {
+    throw createMasOfficeConversionError();
+  }
+
   // 5. Establish secure temp session directory
   const sessionDir = createTempSession();
   
@@ -406,7 +417,7 @@ export async function openCDCFile(filePath: string, passKey?: string): Promise<{
   try {
     const pdfPath = await convertToPDF(sourcePath, sessionDir);
     return { pdfPath, sessionDir };
-  } catch (convError: any) {
+  } catch (convError: unknown) {
     // If conversion fails, clean up the session dir immediately
     cleanupSession(sessionDir);
     throw convError;

@@ -26,6 +26,19 @@ dist-ssr
 
 # Electron / desktop build artifacts
 release/
+release-mas/
 tmp-*
 temp-electron-check.cjs
+
+# Apple signing / App Store secrets and local profiles
+*.p12
+*.cer
+*.p8
+AuthKey_*.p8
+*.key
+*.csr
+*.provisionprofile
+build/embedded.provisionprofile
+build/embedded.dev.provisionprofile
+mas-signing/
 

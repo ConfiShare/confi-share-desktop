@@ -2,12 +2,13 @@ import { app } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { execFile } from 'node:child_process';
+import { createMasOfficeConversionError, isMacAppStoreBuild } from './runtime.js';
 
 // Secure temporary conversion directory inside the secure Electron userData folder
 const CONVERSIONS_DIR = path.join(app.getPath('userData'), 'temp_conversions');
 
 // Active sequential promise-based queue for conversion tasks
-let activeQueue: Promise<any> = Promise.resolve();
+let activeQueue: Promise<unknown> = Promise.resolve();
 
 // Cached path of the LibreOffice executable once detected
 let detectedSofficePath: string | null = null;
@@ -17,6 +18,10 @@ let detectedSofficePath: string | null = null;
  * Checks standard install locations on Windows, macOS, and Linux, falling back to PATH.
  */
 export function getLibreOfficePath(): string {
+  if (isMacAppStoreBuild()) {
+    throw createMasOfficeConversionError();
+  }
+
   if (detectedSofficePath) return detectedSofficePath as string;
 
   const platform = process.platform;
@@ -250,6 +255,13 @@ export function convertToPdfSecurely(
     // If it's already a PDF, return the buffer directly
     if (fileType.ext === '.pdf') {
       return buffer;
+    }
+
+    // The App Store build cannot launch an external LibreOffice process.
+    // Native previews cover modern Office/OpenDocument/text formats; legacy
+    // binary formats are reported as an explicit product limitation.
+    if (isMacAppStoreBuild()) {
+      throw createMasOfficeConversionError();
     }
 
     // 2. Setup randomized secure temporary directories

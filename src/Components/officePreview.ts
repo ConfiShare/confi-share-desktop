@@ -5,6 +5,7 @@ import { buildRichDocxPreview, buildRichPptxPreview } from './officeRichPreview'
 type PreviewFormat =
   | 'docx'
   | 'xlsx'
+  | 'xls'
   | 'pptx'
   | 'odt'
   | 'ods'
@@ -113,6 +114,7 @@ export interface OfficePreviewData {
 const DIRECT_OFFICE_EXTENSIONS = new Set([
   '.docx',
   '.xlsx',
+  '.xls',
   '.pptx',
   '.odt',
   '.ods',
@@ -126,6 +128,7 @@ const DIRECT_OFFICE_EXTENSIONS = new Set([
 const DIRECT_OFFICE_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'application/vnd.oasis.opendocument.text',
   'application/vnd.oasis.opendocument.spreadsheet',
@@ -475,6 +478,7 @@ function detectFormatFromMimeOrExt(fileName: string, mimeType: string): PreviewF
   const mime = normalizeMimeType(mimeType);
   if (ext === '.docx' || mime.includes('wordprocessingml.document')) return 'docx';
   if (ext === '.xlsx' || mime.includes('spreadsheetml.sheet')) return 'xlsx';
+  if (ext === '.xls' || mime === 'application/vnd.ms-excel') return 'xls';
   if (ext === '.pptx' || mime.includes('presentationml.presentation')) return 'pptx';
   if (ext === '.odt' || mime === 'application/vnd.oasis.opendocument.text') return 'odt';
   if (ext === '.ods' || mime === 'application/vnd.oasis.opendocument.spreadsheet') return 'ods';
@@ -575,7 +579,7 @@ export async function buildOfficePreview(
     if (format === 'docx') {
       return (await tryRichPreview(() => buildRichDocxPreview(fileBytes, fileName))) ?? (await buildDocxPreview(fileBytes, fileName));
     }
-    if (format === 'xlsx') return await buildXlsxPreview(fileBytes, fileName);
+    if (format === 'xlsx' || format === 'xls') return await buildXlsxPreview(fileBytes, fileName);
     if (format === 'pptx') {
       return (await tryRichPreview(() => buildRichPptxPreview(fileBytes, fileName))) ?? (await buildPptxPreview(fileBytes, fileName));
     }

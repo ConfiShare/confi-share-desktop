@@ -1,0 +1,143 @@
+name: Build Mac App Store Dev App
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-mas-dev:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate required mas-dev secrets
+        env:
+          MAS_DEV_CERT_P12: ${{ secrets.MAS_DEV_CERTIFICATE_P12_BASE64 }}
+          MAS_DEV_CERT_PW: ${{ secrets.MAS_DEV_CERTIFICATE_PASSWORD }}
+          MAS_DEV_PROFILE: ${{ secrets.MAS_DEV_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -e
+          MISSING=0
+          [ -n "$MAS_DEV_CERT_P12" ] || { echo "::error::Missing secret MAS_DEV_CERTIFICATE_P12_BASE64"; MISSING=1; }
+          [ -n "$MAS_DEV_CERT_PW" ] || { echo "::error::Missing secret MAS_DEV_CERTIFICATE_PASSWORD"; MISSING=1; }
+          [ -n "$MAS_DEV_PROFILE" ] || { echo "::error::Missing secret MAS_DEV_PROVISIONING_PROFILE_BASE64"; MISSING=1; }
+          if [ "$MISSING" -eq 1 ]; then
+            echo "::error::Create an Apple Development/Mac Developer .p12 and a Mac App Development profile for com.confishare.desktop. See docs/MAC_APP_STORE.md."
+            exit 1
+          fi
+
+      - name: Write development provisioning profile
+        env:
+          MAS_DEV_PROFILE: ${{ secrets.MAS_DEV_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -e
+          mkdir -p build
+          node -e "require('fs').writeFileSync('build/embedded.dev.provisionprofile', Buffer.from(process.env.MAS_DEV_PROFILE, 'base64'))"
+          security cms -D -i build/embedded.dev.provisionprofile > /tmp/mas-dev-profile.plist
+          /usr/libexec/PlistBuddy -c 'Print :Name' /tmp/mas-dev-profile.plist || true
+          /usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' /tmp/mas-dev-profile.plist || true
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install --no-save @rollup/rollup-darwin-arm64@4.57.1 lightningcss-darwin-arm64@1.30.2 @tailwindcss/oxide-darwin-arm64@4.1.18
+
+      - name: Preflight mas-dev configuration
+        env:
+          CSC_LINK: ${{ secrets.MAS_DEV_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAS_DEV_CERTIFICATE_PASSWORD }}
+        run: npm run mas:preflight -- --dev
+
+      - name: Build signed mas-dev app
+        env:
+          CSC_LINK: ${{ secrets.MAS_DEV_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAS_DEV_CERTIFICATE_PASSWORD }}
+        run: npm run build:mas:dev
+
+      - name: Verify and archive mas-dev app
+        run: |
+          set -e
+          APP=$(find release-mas -type d -name 'ConfiShare.app' -print -quit)
+          [ -n "$APP" ] || { echo "::error::mas-dev app was not produced"; exit 1; }
+
+          echo "Verifying $APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dvvv "$APP" 2>&1 | tee /tmp/mas-dev-codesign.txt
+          grep -qE 'Authority=(Apple Development|Mac Developer)' /tmp/mas-dev-codesign.txt
+
+          codesign -d --entitlements :- "$APP" 2>/dev/null > /tmp/mas-dev-app-entitlements.plist
+          plutil -convert xml1 /tmp/mas-dev-app-entitlements.plist
+          grep -q 'com.apple.security.app-sandbox' /tmp/mas-dev-app-entitlements.plist
+          grep -q 'com.apple.security.network.client' /tmp/mas-dev-app-entitlements.plist
+
+          for HELPER in "$APP"/Contents/Frameworks/ConfiShare\ Helper*.app; do
+            [ -d "$HELPER" ] || continue
+            codesign --verify --strict --verbose=2 "$HELPER"
+            codesign -d --entitlements :- "$HELPER" 2>/dev/null > /tmp/mas-dev-helper-entitlements.plist
+            plutil -convert xml1 /tmp/mas-dev-helper-entitlements.plist
+            grep -q 'com.apple.security.app-sandbox' /tmp/mas-dev-helper-entitlements.plist
+            grep -q 'com.apple.security.inherit' /tmp/mas-dev-helper-entitlements.plist
+          done
+
+          OUT_DIR=$(dirname "$APP")
+          ZIP="$OUT_DIR/ConfiShare-mas-dev.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+          shasum -a 256 "$ZIP" > "$ZIP.sha256"
+          cat "$ZIP.sha256"
+
+      - name: Upload mas-dev app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: confishare-mas-dev-app
+          path: |
+            release-mas/*/mas-dev-universal/ConfiShare-mas-dev.zip
+            release-mas/*/mas-dev-universal/ConfiShare-mas-dev.zip.sha256
+          if-no-files-found: error
+
+      - name: Smoke test mas-dev launch
+        run: |
+          set -e
+          APP=$(find release-mas -type d -name 'ConfiShare.app' -print -quit)
+          [ -n "$APP" ] || { echo "::error::mas-dev app was not produced"; exit 1; }
+
+          LOG=/tmp/confishare-smoke.log
+          "$APP/Contents/MacOS/ConfiShare" --remote-debugging-port=9222 > "$LOG" 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+
+          READY=0
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9222/json/list > /tmp/confishare-pages.json 2>/dev/null; then
+              READY=1
+              break
+            fi
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            echo "::error::mas-dev app did not start its renderer"
+            cat "$LOG" || true
+            exit 1
+          fi
+
+          cat /tmp/confishare-pages.json
+          grep -qE '"type"[[:space:]]*:[[:space:]]*"page"' /tmp/confishare-pages.json
+
+      - name: Reminder
+        run: |
+          echo "Download the zip on a Mac, unzip it, and open ConfiShare.app."
+          echo "If Gatekeeper blocks it, run: xattr -dr com.apple.quarantine /path/to/ConfiShare.app"
+          echo "Then run every item in docs/MAS_TEST_PLAN.md before uploading the distribution .pkg."

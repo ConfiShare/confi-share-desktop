@@ -312,7 +312,7 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
         }
       }
 
-      // Everything else (e.g. old .doc / .xls / .ppt): convert to PDF.
+      // Everything else (e.g. old .doc / .ppt): convert to PDF.
       const pdfBytes = await window.drmApi.convertToPdf(doc.id, uint8ArrayToBase64(bytes), viewName, mimeType);
       if (isStale()) return;
       setViewerMode('pdf');
@@ -462,10 +462,15 @@ export function DocumentViewer({ doc }: DocumentViewerProps) {
         console.error('[Viewer] Failed to load/convert document:', err);
         if (active && currentDocIdRef.current === doc.id) {
           const rawMessage = err instanceof Error ? err.message : String(err || 'Failed to load and display document securely.');
-          if (/soffice\s+ENOENT/i.test(rawMessage)) {
+          if (rawMessage.includes('MAS_OFFICE_CONVERSION_UNAVAILABLE')) {
+            setConversionError(
+              'This document requires Office-to-PDF conversion, which is not available in the Mac App Store build. ' +
+              'Legacy .doc/.ppt files are not supported there. Convert the file to PDF or re-import it as DOCX/XLSX/XLS/PPTX/ODT/ODS/ODP.'
+            );
+          } else if (/soffice\s+ENOENT/i.test(rawMessage)) {
             setConversionError(
               'Built-in Office conversion is unavailable for this format on this device. ' +
-              'Use DOCX/XLSX/PPTX/ODT/ODS/ODP/CSV/TXT/RTF and image files for direct in-app preview.'
+              'Use DOCX/XLSX/XLS/PPTX/ODT/ODS/ODP/CSV/TXT/RTF and image files for direct in-app preview.'
             );
           } else {
             setConversionError(rawMessage);
