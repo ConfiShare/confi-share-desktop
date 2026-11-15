@@ -99,15 +99,25 @@ jobs:
           npm ci
           npm install --no-save @rollup/rollup-darwin-arm64@4.57.1 lightningcss-darwin-arm64@1.30.2 @tailwindcss/oxide-darwin-arm64@4.1.18
 
-      - name: Build macOS app (arm64)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx --no-install electron-builder --mac dmg --arm64 --publish never
+      - name: Compile macOS app
+        run: |
+          npx --no-install tsc
+          npx --no-install vite build
 
       - name: Build macOS app (x64)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx --no-install electron-builder --mac dmg --x64 --publish never
+
+      - name: Build macOS app (arm64)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --no-install electron-builder --mac dmg --arm64 --publish never
+
+      - name: Build macOS app (universal)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --no-install electron-builder --mac dmg --universal --publish never
 
       - name: Notarize and staple macOS DMGs
         run: |
@@ -126,14 +136,45 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Verify signing, notarization, and staple
+      - name: Verify signing, notarization, and architectures
         run: |
           set -e
+
+          DMG_COUNT=$(ls release/*/ConfiShare-Mac-*-Installer.dmg 2>/dev/null | wc -l | tr -d ' ')
+          echo "macOS DMG count: $DMG_COUNT"
+          [ "$DMG_COUNT" -ge 3 ] || { echo "::error::Expected x64, arm64 and universal DMGs, found $DMG_COUNT"; exit 1; }
+          UNIVERSAL_DMG=$(ls release/*/ConfiShare-Mac-*-universal-Installer.dmg 2>/dev/null | head -n1 || true)
+          [ -n "$UNIVERSAL_DMG" ] || { echo "::error::Universal DMG was not produced"; exit 1; }
+
           FOUND_APP=0
-          FOUND_DMG=0
           for APP in release/*/mac*/ConfiShare.app; do
             [ -d "$APP" ] || continue
-            FOUND_APP=1
+            FOUND_APP=$((FOUND_APP + 1))
+            ARCHS=$(lipo -archs "$APP/Contents/MacOS/ConfiShare")
+            echo "::group::$APP architectures ($ARCHS)"
+            case "$APP" in
+              *mac-universal*)
+                for ARCH in x86_64 arm64; do
+                  case " $ARCHS " in
+                    *" $ARCH "*) ;;
+                    *) echo "::error::Universal app $APP is missing $ARCH"; exit 1 ;;
+                  esac
+                done
+                ;;
+              *mac-arm64*)
+                case " $ARCHS " in
+                  *" arm64 "*) ;;
+                  *) echo "::error::arm64 app $APP is missing arm64"; exit 1 ;;
+                esac
+                ;;
+              *)
+                case " $ARCHS " in
+                  *" x86_64 "*) ;;
+                  *) echo "::error::x64 app $APP is missing x86_64"; exit 1 ;;
+                esac
+                ;;
+            esac
+            echo "::endgroup::"
             echo "::group::codesign (strict) $APP"
             codesign --verify --deep --strict --verbose=2 "$APP"
             echo "---"
@@ -146,13 +187,12 @@ jobs:
             xcrun stapler validate "$APP"
             echo "::endgroup::"
           done
-          if [ "$FOUND_APP" -eq 0 ]; then
-            echo "::error::No .app bundle was produced"
-            exit 1
-          fi
-          for DMG in release/*/ConfiShare-*-Installer.dmg; do
+          [ "$FOUND_APP" -ge 3 ] || { echo "::error::Expected x64, arm64 and universal .app bundles, found $FOUND_APP"; exit 1; }
+
+          FOUND_DMG=0
+          for DMG in release/*/ConfiShare-Mac-*-Installer.dmg; do
             [ -f "$DMG" ] || continue
-            FOUND_DMG=1
+            FOUND_DMG=$((FOUND_DMG + 1))
             echo "::group::hdiutil verify $DMG"
             hdiutil verify "$DMG"
             echo "::endgroup::"
@@ -163,25 +203,53 @@ jobs:
             spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG"
             echo "::endgroup::"
           done
-          if [ "$FOUND_DMG" -eq 0 ]; then
-            echo "::error::No DMG was produced"
-            exit 1
-          fi
-          ls -lh release/*/ConfiShare-*-Installer.dmg release/*/mac*/ConfiShare.app
+          [ "$FOUND_DMG" -ge 3 ] || { echo "::error::Expected 3 DMGs, found $FOUND_DMG"; exit 1; }
+          ls -lh release/*/ConfiShare-Mac-*-Installer.dmg release/*/mac*/ConfiShare.app
+
+      - name: Generate SHA-256 checksums
+        run: |
+          set -e
+          VERSION=$(node -p "require('./package.json').version")
+          cd "release/$VERSION"
+          shasum -a 256 ConfiShare-Mac-*-Installer.dmg > "ConfiShare-Mac-$VERSION-SHA256SUMS.txt"
+          cat "ConfiShare-Mac-$VERSION-SHA256SUMS.txt"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: confishare-macos-dmg
-          path: release/*/ConfiShare-*-Installer.dmg
+          path: |
+            release/*/ConfiShare-Mac-*-Installer.dmg
+            release/*/ConfiShare-Mac-*-SHA256SUMS.txt
 
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
-          files: release/*/ConfiShare-*-Installer.dmg
+          files: |
+            release/*/ConfiShare-Mac-*-Installer.dmg
+            release/*/ConfiShare-Mac-*-SHA256SUMS.txt
           draft: false
           prerelease: false
+
+      - name: Add rebuild provenance note
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="${{ github.event.inputs.release_tag || github.ref_name }}"
+          SHA="${{ github.sha }}"
+          BODY=$(gh release view "$TAG" --json body --jq .body || true)
+          BODY=$(printf '%s\n' "$BODY" | sed '/^<!-- rebuild-provenance -->$/,$d')
+          {
+            printf '%s\n' "$BODY"
+            echo
+            echo '<!-- rebuild-provenance -->'
+            echo '### Rebuilt installers'
+            echo
+            echo "macOS (x64, arm64, universal), Windows, and Linux installers attached to this release were rebuilt from commit [\`${SHA:0:7}\`](https://github.com/${GITHUB_REPOSITORY}/commit/${SHA}) on $(date -u +'%Y-%m-%d %H:%M UTC'). The \`$TAG\` tag was not moved and still identifies its original commit."
+          } > /tmp/release-body.md
+          gh release edit "$TAG" --notes-file /tmp/release-body.md
 
   build-linux:
     runs-on: ubuntu-latest

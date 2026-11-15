@@ -202,6 +202,19 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindowType | null
 const APP_ICON_PATH = path.join(process.env.VITE_PUBLIC!, 'app-icon.png')
 
+// IPC handlers belong to the app process, so register this only once.
+ipcMain.handle('window:set-content-protection', async (event, enable: boolean) => {
+  try {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender)
+    if (!senderWindow) return false
+    senderWindow.setContentProtection(Boolean(enable))
+    return true
+  } catch (err) {
+    console.error('Failed to set content protection:', err)
+    return false
+  }
+})
+
 function isBlockedShortcut(input: Electron.Input): boolean {
   const isZoomShortcut =
     (input.control || input.meta) &&
@@ -239,18 +252,6 @@ function createWindow() {
 
   // Allow screenshots and screen sharing/recording tools to capture the app window.
   win.setContentProtection(false)
-  // Listen for renderer requests to toggle content protection (prevent screenshots)
-  ipcMain.handle('window:set-content-protection', async (_event, enable: boolean) => {
-    try {
-      if (win) {
-        win.setContentProtection(Boolean(enable))
-      }
-      return true
-    } catch (err) {
-      console.error('Failed to set content protection:', err)
-      return false
-    }
-  })
 
   // Keep app-level zoom fixed; the document viewer controls zoom itself.
   win.webContents.setZoomFactor(1)

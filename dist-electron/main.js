@@ -1,5 +1,5 @@
 import * as G from "electron";
-import { app as g, safeStorage as U } from "electron";
+import { app as g, safeStorage as K } from "electron";
 import { fileURLToPath as Z } from "node:url";
 import i from "node:path";
 import a from "node:fs";
@@ -21,7 +21,7 @@ function Y(t, e) {
     throw console.error("unwrapKeyWithPass failed:", n), r;
   }
 }
-function k(t, e, r, n) {
+function V(t, e, r, n) {
   try {
     const o = j.createDecipheriv("aes-256-gcm", e, r);
     return o.setAuthTag(n), Buffer.concat([o.update(t), o.final()]);
@@ -30,7 +30,7 @@ function k(t, e, r, n) {
     throw console.error("aesGcmDecrypt failed:", c), o;
   }
 }
-async function V(t, e) {
+async function N(t, e) {
   if (typeof t != "object" || t === null)
     throw new Error("Invalid container format");
   const r = t, n = r.meta;
@@ -49,19 +49,19 @@ async function V(t, e) {
     { name: "Hashed PassKey + Base64 Salt", p: f, s: d },
     { name: "Hashed PassKey + Base64url Salt", p: f, s: p }
   ];
-  let m = null;
+  let l = null;
   for (const x of u)
     try {
-      const v = j.pbkdf2Sync(x.p, x.s, 1e5, 32, "sha256"), b = Y(o.wrappedKey, v), F = Buffer.from(o.iv, "base64"), P = Buffer.from(o.tag, "base64"), S = Buffer.from(c, "base64"), q = k(S, b, F, P);
+      const v = j.pbkdf2Sync(x.p, x.s, 1e5, 32, "sha256"), b = Y(o.wrappedKey, v), F = Buffer.from(o.iv, "base64"), P = Buffer.from(o.tag, "base64"), S = Buffer.from(c, "base64"), q = V(S, b, F, P);
       return console.log(`Successfully decrypted using ${x.name}`), {
         decryptedPayload: q.toString("utf8"),
         contentKey: b.toString("base64")
       };
     } catch (v) {
       const b = v instanceof Error ? v.message : "Unknown variation error";
-      console.error(`${x.name} failed:`, b), m = v;
+      console.error(`${x.name} failed:`, b), l = v;
     }
-  const w = m instanceof Error ? m.message : "Unknown decryption error";
+  const w = l instanceof Error ? l.message : "Unknown decryption error";
   throw new Error(`Decryption failed: All variations failed. Last error: ${w}`);
 }
 async function M(t, e) {
@@ -76,10 +76,10 @@ async function M(t, e) {
   if (typeof o.iv != "string" || typeof o.tag != "string")
     throw new Error("Invalid container crypto metadata");
   const f = Buffer.from(e, "base64"), s = Buffer.from(o.iv, "base64"), d = Buffer.from(o.tag, "base64"), p = Buffer.from(c, "base64");
-  return k(p, f, s, d).toString("utf8");
+  return V(p, f, s, d).toString("utf8");
 }
 const C = i.join(g.getPath("userData"), "temp_conversions");
-let K = Promise.resolve(), E = null;
+let k = Promise.resolve(), E = null;
 function ee() {
   if (E) return E;
   const t = process.platform, e = [], r = t === "win32" ? "soffice.exe" : "soffice", n = i.join("libreoffice", "program", r), o = process.env.APP_ROOT ? i.resolve(process.env.APP_ROOT) : process.cwd();
@@ -185,35 +185,35 @@ function ne(t, e, r = 3e4) {
   });
 }
 function oe(t, e, r, n) {
-  const o = K.then(async () => {
+  const o = k.then(async () => {
     const c = te(e, r, n);
     if (console.log(`[LibreOffice] Detected format for docId ${t}: ${c.ext} (${c.mime})`), c.ext === ".pdf")
       return e;
     const f = Math.random().toString(36).substring(2, 10), s = i.join(C, `${t}_${f}`), d = i.join(s, `input${c.ext}`), p = i.join(s, "input.pdf");
     try {
       a.mkdirSync(s, { recursive: !0 }), a.writeFileSync(d, e);
-      const u = ee(), m = i.join(s, "profile"), w = [
+      const u = ee(), l = i.join(s, "profile"), w = [
         "--headless",
-        `-env:UserInstallation=file:///${m.replace(/\\/g, "/")}`,
+        `-env:UserInstallation=file:///${l.replace(/\\/g, "/")}`,
         "--convert-to",
         "pdf",
         d,
         "--outdir",
         s
       ];
-      if (console.log(`[LibreOffice] Starting conversion for docId ${t} using userProfileDir: ${m}`), await ne(u, w), !a.existsSync(p))
+      if (console.log(`[LibreOffice] Starting conversion for docId ${t} using userProfileDir: ${l}`), await ne(u, w), !a.existsSync(p))
         throw new Error("LibreOffice finished converting but no PDF output was found.");
       const x = a.readFileSync(p);
       return console.log(`[LibreOffice] Successfully converted docId ${t} to PDF, size: ${x.length} bytes.`), x;
     } finally {
       try {
         if (a.existsSync(d)) {
-          const u = a.statSync(d).size, m = Buffer.alloc(u);
-          a.writeFileSync(d, m);
+          const u = a.statSync(d).size, l = Buffer.alloc(u);
+          a.writeFileSync(d, l);
         }
         if (a.existsSync(p)) {
-          const u = a.statSync(p).size, m = Buffer.alloc(u);
-          a.writeFileSync(p, m);
+          const u = a.statSync(p).size, l = Buffer.alloc(u);
+          a.writeFileSync(p, l);
         }
       } catch (u) {
         console.warn("[LibreOffice] Failed to safely overwrite temporary files during shredding:", u);
@@ -225,7 +225,7 @@ function oe(t, e, r, n) {
       }
     }
   });
-  return K = o.catch((c) => {
+  return k = o.catch((c) => {
     console.error("[LibreOffice] Conversion queue item failed:", c);
   }), o;
 }
@@ -245,12 +245,12 @@ Please ensure the LibreOffice binaries are placed in the 'resources/libreoffice/
 }
 function $(t, e) {
   try {
-    if (!U.isEncryptionAvailable())
+    if (!K.isEncryptionAvailable())
       return null;
     const r = i.join(g.getPath("userData"), "secure_metadata.json");
     if (!a.existsSync(r)) return null;
     const o = JSON.parse(a.readFileSync(r, "utf-8"))[t]?.[e];
-    return o ? U.decryptString(Buffer.from(o, "base64")) : null;
+    return o ? K.decryptString(Buffer.from(o, "base64")) : null;
   } catch (r) {
     return console.error(`[documentProcessor] Failed to decrypt ${e} for ${t}:`, r), null;
   }
@@ -388,10 +388,10 @@ function ue(t, e) {
     }), f.on("close", (d) => {
       if (d !== 0)
         return console.error(`[documentProcessor] Soffice process exited with code ${d}. Stderr: ${s}`), n(new Error(`Conversion failed with exit code ${d}.`));
-      const u = `${i.parse(t).name}.pdf`, m = i.join(e, u);
-      if (!a.existsSync(m))
+      const u = `${i.parse(t).name}.pdf`, l = i.join(e, u);
+      if (!a.existsSync(l))
         return n(new Error("LibreOffice exited successfully, but no output PDF file was found."));
-      console.log(`[documentProcessor] Office file converted successfully: ${m}`), r(m);
+      console.log(`[documentProcessor] Office file converted successfully: ${l}`), r(l);
     });
   });
 }
@@ -406,12 +406,12 @@ async function pe(t, e) {
   }
   if (!c)
     throw new Error("Access code required to decrypt this document.");
-  const f = await V(n, c), d = JSON.parse(f.decryptedPayload).file;
+  const f = await N(n, c), d = JSON.parse(f.decryptedPayload).file;
   if (!d)
     throw new Error("Invalid document payload structure.");
-  const p = Buffer.from(d, "base64"), u = n.meta?.mime, m = n.meta?.name || i.basename(t), w = ae(p, u, m);
+  const p = Buffer.from(d, "base64"), u = n.meta?.mime, l = n.meta?.name || i.basename(t), w = ae(p, u, l);
   console.log(`[documentProcessor] Detected type: ${w}`);
-  const x = fe(), v = i.extname(m).replace(".", "").toLowerCase(), F = (w === "unknown" ? v || "bin" : w).replace(/[^a-z0-9]/g, "") || "bin", P = i.join(x, `source.${F}`);
+  const x = fe(), v = i.extname(l).replace(".", "").toLowerCase(), F = (w === "unknown" ? v || "bin" : w).replace(/[^a-z0-9]/g, "") || "bin", P = i.join(x, `source.${F}`);
   if (a.writeFileSync(P, p), w === "pdf" || ie.has(w))
     return { pdfPath: P, sessionDir: x };
   try {
@@ -420,9 +420,9 @@ async function pe(t, e) {
     throw A(x), S;
   }
 }
-const { app: h, BrowserWindow: N, ipcMain: y, safeStorage: B, session: le } = G, z = i.dirname(Z(import.meta.url)), L = i.join(h.getPath("userData"), "secure_metadata.json"), I = i.join(h.getPath("userData"), "documents.json"), T = i.join(h.getPath("userData"), "stored_docs");
+const { app: h, BrowserWindow: R, ipcMain: y, safeStorage: B, session: le } = G, z = i.dirname(Z(import.meta.url)), L = i.join(h.getPath("userData"), "secure_metadata.json"), I = i.join(h.getPath("userData"), "documents.json"), T = i.join(h.getPath("userData"), "stored_docs");
 a.existsSync(T) || a.mkdirSync(T, { recursive: !0 });
-function R() {
+function U() {
   if (!a.existsSync(L)) return {};
   try {
     return JSON.parse(a.readFileSync(L, "utf-8"));
@@ -467,7 +467,7 @@ y.handle("docs:read-local-file", async (t, e) => {
 });
 y.handle("drm:decrypt-cdc", async (t, e, r) => {
   try {
-    return await V(e, r);
+    return await N(e, r);
   } catch (n) {
     throw console.error("Decryption failed:", n), new Error(`Decryption failed: ${n.message}`);
   }
@@ -504,13 +504,13 @@ y.handle("close-cdc-session", async (t, e) => {
 y.handle("secure:set-data", async (t, e, r, n) => {
   if (!B.isEncryptionAvailable())
     throw new Error("Safe storage is not available on this system");
-  const o = B.encryptString(n), c = R();
+  const o = B.encryptString(n), c = U();
   return c[e] || (c[e] = {}), c[e][r] = o.toString("base64"), W(c), !0;
 });
 y.handle("secure:get-data", async (t, e, r) => {
   if (!B.isEncryptionAvailable())
     throw new Error("Safe storage is not available on this system");
-  const o = R()[e]?.[r];
+  const o = U()[e]?.[r];
   if (!o) return null;
   try {
     return B.decryptString(Buffer.from(o, "base64"));
@@ -519,20 +519,28 @@ y.handle("secure:get-data", async (t, e, r) => {
   }
 });
 y.handle("secure:remove-doc-data", async (t, e) => {
-  const r = R();
+  const r = U();
   return r[e] ? (delete r[e], W(r), !0) : !1;
 });
 process.env.APP_ROOT = i.join(z, "..");
 const O = process.env.VITE_DEV_SERVER_URL, Pe = i.join(process.env.APP_ROOT, "dist-electron"), H = i.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = O ? i.join(process.env.APP_ROOT, "public") : H;
-let l;
+let m;
 const me = i.join(process.env.VITE_PUBLIC, "app-icon.png");
+y.handle("window:set-content-protection", async (t, e) => {
+  try {
+    const r = R.fromWebContents(t.sender);
+    return r ? (r.setContentProtection(!!e), !0) : !1;
+  } catch (r) {
+    return console.error("Failed to set content protection:", r), !1;
+  }
+});
 function xe(t) {
   const e = (t.control || t.meta) && ["Equal", "NumpadAdd", "Minus", "NumpadSubtract", "Digit0", "Numpad0"].includes(t.code), r = (t.control || t.meta) && t.code === "KeyP", n = (t.control || t.meta) && t.code === "KeyS", o = (h.isPackaged || !O) && (t.code === "F12" || (t.control || t.meta) && t.shift && t.code === "KeyI" || (t.control || t.meta) && t.alt && t.code === "KeyI");
   return e || r || n || o;
 }
 function J() {
-  l = new N({
+  m = new R({
     width: 1280,
     height: 800,
     minWidth: 900,
@@ -548,32 +556,26 @@ function J() {
       nodeIntegration: !1,
       sandbox: !0
     }
-  }), l.setContentProtection(!1), y.handle("window:set-content-protection", async (t, e) => {
-    try {
-      return l && l.setContentProtection(!!e), !0;
-    } catch (r) {
-      return console.error("Failed to set content protection:", r), !1;
-    }
-  }), l.webContents.setZoomFactor(1), l.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {
-  }), l.webContents.on("zoom-changed", (t) => {
-    t.preventDefault(), l?.webContents.setZoomFactor(1);
-  }), l.webContents.on("before-input-event", (t, e) => {
+  }), m.setContentProtection(!1), m.webContents.setZoomFactor(1), m.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {
+  }), m.webContents.on("zoom-changed", (t) => {
+    t.preventDefault(), m?.webContents.setZoomFactor(1);
+  }), m.webContents.on("before-input-event", (t, e) => {
     e.type === "keyDown" && xe(e) && t.preventDefault();
-  }), l.webContents.on("context-menu", (t) => {
+  }), m.webContents.on("context-menu", (t) => {
     t.preventDefault();
-  }), l.once("ready-to-show", () => {
-    l?.show();
-  }), l.webContents.setWindowOpenHandler(() => ({ action: "deny" })), l.webContents.on("will-navigate", (t) => {
+  }), m.once("ready-to-show", () => {
+    m?.show();
+  }), m.webContents.setWindowOpenHandler(() => ({ action: "deny" })), m.webContents.on("will-navigate", (t) => {
     t.preventDefault();
-  }), (h.isPackaged || !O) && l.webContents.on("devtools-opened", () => {
-    l?.webContents.closeDevTools();
-  }), O ? l.loadURL(O) : l.loadFile(i.join(H, "index.html"));
+  }), (h.isPackaged || !O) && m.webContents.on("devtools-opened", () => {
+    m?.webContents.closeDevTools();
+  }), O ? m.loadURL(O) : m.loadFile(i.join(H, "index.html"));
 }
 h.on("window-all-closed", () => {
-  process.platform !== "darwin" && (h.quit(), l = null);
+  process.platform !== "darwin" && (h.quit(), m = null);
 });
 h.on("activate", () => {
-  N.getAllWindows().length === 0 && J();
+  R.getAllWindows().length === 0 && J();
 });
 h.whenReady().then(() => {
   le.defaultSession.on("will-download", (t) => {
