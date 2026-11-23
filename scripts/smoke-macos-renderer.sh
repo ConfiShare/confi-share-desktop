@@ -27,7 +27,7 @@ APP_PID=$!
 READY=0
 for _ in $(seq 1 45); do
   if curl --silent --fail "http://127.0.0.1:$PORT/json/list" > "$PAGES"; then
-    if node -e 'const pages=require(process.argv[1]); if (!pages.some(p => p.type === "page" && p.url.startsWith("file://"))) process.exit(1)' "$PAGES"; then
+    if node -e 'const pages=JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (!Array.isArray(pages) || !pages.some(p => p.type === "page" && p.url.startsWith("file://") && /ConfiShare/i.test(p.title || ""))) process.exit(1)' "$PAGES" 2>/dev/null; then
       READY=1
       break
     fi
@@ -45,4 +45,4 @@ if [ "$READY" -ne 1 ]; then
 fi
 
 echo "Compiled renderer opened in Electron on macOS."
-node -e 'const pages=require(process.argv[1]); for (const p of pages.filter(p => p.type === "page")) console.log(`Page: ${p.title} ${p.url}`)' "$PAGES"
+node -e 'const pages=JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); for (const p of pages.filter(p => p.type === "page")) console.log(`Page: ${p.title} ${p.url}`)' "$PAGES"
