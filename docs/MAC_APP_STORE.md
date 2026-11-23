@@ -12,7 +12,7 @@ The repository now has a separate Mac App Store build path:
 - `.github/workflows/mas.yml` is a manual build-and-validate workflow with a separate upload switch.
 - `docs/MAS_TEST_PLAN.md` is the required macOS test checklist.
 
-The first macOS GitHub Actions run [45201665607](https://github.com/ConfiShare/confi-share-desktop/actions/runs/45201665607) built the universal `.app` and signed `.pkg` successfully. Its automated validation passed architecture, app/helper signatures, sandbox entitlements, bundle identity, provisioning profile, and package signature. The second run [45214135585](https://github.com/ConfiShare/confi-share-desktop/actions/runs/45214135585) produced build `1.0.100002` for version `1.0.2`, passed the same checks, and Apple `altool` reported validation with no errors and upload success with zero warnings. Apple processing and interactive TestFlight testing remain outstanding. The app has **not** been submitted for App Review.
+The first macOS GitHub Actions run [45201665607](https://github.com/ConfiShare/confi-share-desktop/actions/runs/45201665607) built the universal `.app` and signed `.pkg` successfully. Its automated validation passed architecture, app/helper signatures, sandbox entitlements, bundle identity, provisioning profile, and package signature. The second run [45214135585](https://github.com/ConfiShare/confi-share-desktop/actions/runs/45214135585) produced build `1.0.100002` for version `1.0.2`, passed the same checks, and Apple `altool` reported validation with no errors and upload success with zero warnings. A separate CI smoke check now opens the compiled renderer in Electron on macOS before any optional upload; this checks launch only and does not reproduce an App Store installation. Apple processing and interactive TestFlight testing remain outstanding. The app has **not** been submitted for App Review.
 
 ### Source audit
 
@@ -253,7 +253,7 @@ Both workflows are manual (`workflow_dispatch`). The distribution workflow can o
 
 The workflow maps the installer secrets to `CSC_INSTALLER_LINK` and `CSC_INSTALLER_KEY_PASSWORD`.
 
-The workflow writes the profile, runs preflight, builds the signed universal `.pkg`, validates it, and uploads the `.pkg`, validation report, and SHA-256 checksum as an artifact.
+The workflow writes the profile, runs preflight, builds the signed universal `.pkg`, validates it, smoke tests the compiled renderer on macOS, and uploads the `.pkg`, validation report, and SHA-256 checksum as an artifact.
 
 To upload the validated package to App Store Connect from CI, use either `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, and `ASC_API_KEY_P8_BASE64` (base64 of `AuthKey_<KEY_ID>.p8`), or the existing `APPLE_ID` and `APPLE_APP_SPECIFIC_PASSWORD` repository secrets. Create an API key at App Store Connect > Users and Access > Integrations > App Store Connect API if you prefer that method. The key is for upload and is separate from both signing certificates. Download the `.p8` once and keep it encrypted outside git.
 

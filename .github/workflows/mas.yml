@@ -83,6 +83,9 @@ jobs:
         run: |
           MAS_EXPECTED_BUILD_VERSION="1.0.$((100000 + GITHUB_RUN_NUMBER))" npm run validate:mas
 
+      - name: Smoke test macOS renderer startup
+        run: bash scripts/smoke-macos-renderer.sh
+
       - name: Generate SHA-256 checksum
         run: |
           set -e
