@@ -381,15 +381,12 @@ Complete the app's **Age Rating**, **Content Rights**, **Pricing and Availabilit
 
 On the version page, choose the processed build with the matching bundle ID, version, and run-specific build number. Fill **App Review Information** with a reachable contact and international-format phone number. Provide a working review account and durable sample `.cdc` documents plus valid and revoked/expired code examples through App Store Connect's private review fields, never in git or chat. Review notes should explain the sign-in requirement, activation server, offline window, viewer controls, and unsupported legacy `.doc`/`.ppt` conversion. Choose **Manually release this version** for the first release unless you decide otherwise. Review the complete submission, then request explicit approval before clicking **Add for Review** and **Submit for Review**. After approval, use App Store Connect's manual release control. Future updates require a higher marketing version or new build number, a new signed build, re-testing, updated privacy answers if practices changed, and another review.
 
-## 9. Blockers in this workspace
+## 10. Remaining release gates
 
-This workspace is Windows and has no Apple signing material. It cannot:
+The signed universal `.pkg` passed automated validation on a GitHub macOS runner. The remaining checks are:
 
-- run `npm run build:mas` (requires macOS)
-- sign, package, or validate the `.pkg`
-- launch the `mas-dev` build
-- verify the bundle ID in your Apple account
-- upload to App Store Connect
-- complete or submit the App Store listing
+- Upload the package to App Store Connect and confirm Apple processes it without validation errors.
+- Install the processed build through TestFlight on a Mac and complete `docs/MAS_TEST_PLAN.md`, including sign-in, file import, offline access, and Keychain persistence.
+- Complete the App Store Connect listing and review information, then submit only after the release is approved.
 
-Provide the items in sections 2 and 3, run the macOS steps above, and share the validation report plus test-plan results for review.
+Mac App Store installation requires a supported macOS version, an Apple Account, and Apple's normal App Store delivery. This build targets macOS 12 or later and contains both Intel and Apple silicon binaries. App Sandbox restrictions are mandatory for Mac App Store apps; the app's file picker and network entitlements are configured for its user flow. The app still requires a ConfiShare account to access its protected-document features.
