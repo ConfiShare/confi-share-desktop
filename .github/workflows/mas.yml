@@ -107,21 +107,27 @@ jobs:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
           ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
           set -euo pipefail
           PKG=$(find release-mas -path '*/mas-universal/*.pkg' -print -quit)
           [ -n "$PKG" ] || { echo "::error::Signed .pkg not found"; exit 1; }
-          [ -n "$ASC_API_KEY_ID" ] && [ -n "$ASC_API_ISSUER_ID" ] && [ -n "$ASC_API_KEY_P8_BASE64" ] || {
-            echo "::error::Set ASC_API_KEY_ID, ASC_API_ISSUER_ID, and ASC_API_KEY_P8_BASE64 for upload."
+          if [ -n "$ASC_API_KEY_ID" ] && [ -n "$ASC_API_ISSUER_ID" ] && [ -n "$ASC_API_KEY_P8_BASE64" ]; then
+            KEY_DIR="$HOME/.appstoreconnect/private_keys"
+            mkdir -p "$KEY_DIR"
+            node -e "require('fs').writeFileSync(process.env.HOME + '/.appstoreconnect/private_keys/AuthKey_' + process.env.ASC_API_KEY_ID + '.p8', Buffer.from(process.env.ASC_API_KEY_P8_BASE64, 'base64'))"
+            chmod 600 "$KEY_DIR/AuthKey_$ASC_API_KEY_ID.p8"
+            trap 'rm -f "$KEY_DIR/AuthKey_$ASC_API_KEY_ID.p8"' EXIT
+            xcrun altool --validate-app -f "$PKG" -t macos --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"
+            xcrun altool --upload-app -f "$PKG" -t macos --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"
+          elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+            xcrun altool --validate-app -f "$PKG" -t macos -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
+            xcrun altool --upload-app -f "$PKG" -t macos -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
+          else
+            echo "::error::Set an App Store Connect API key or APPLE_ID and APPLE_APP_SPECIFIC_PASSWORD for upload."
             exit 1
-          }
-          KEY_DIR="$HOME/.appstoreconnect/private_keys"
-          mkdir -p "$KEY_DIR"
-          node -e "require('fs').writeFileSync(process.env.HOME + '/.appstoreconnect/private_keys/AuthKey_' + process.env.ASC_API_KEY_ID + '.p8', Buffer.from(process.env.ASC_API_KEY_P8_BASE64, 'base64'))"
-          chmod 600 "$KEY_DIR/AuthKey_$ASC_API_KEY_ID.p8"
-          trap 'rm -f "$KEY_DIR/AuthKey_$ASC_API_KEY_ID.p8"' EXIT
-          xcrun altool --validate-app -f "$PKG" -t macos --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"
-          xcrun altool --upload-app -f "$PKG" -t macos --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"
+          fi
 
       - name: Remove temporary signing material
         if: always()
