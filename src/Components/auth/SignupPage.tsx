@@ -171,7 +171,7 @@ export function SignupPage() {
             <span>
               I agree to the{' '}
               <a
-                href="https://confishare.io/policy/"
+                href="https://confishare.io/terms-of-service"
                 target="_blank"
                 rel="noreferrer"
                 className="font-medium text-[#059669] hover:text-green-700"
@@ -180,7 +180,7 @@ export function SignupPage() {
               </a>{' '}
               and{' '}
               <a
-                href="https://confishare.io/terms-of-service/"
+                href="https://confishare.io/privacy-policy"
                 target="_blank"
                 rel="noreferrer"
                 className="font-medium text-[#059669] hover:text-green-700"

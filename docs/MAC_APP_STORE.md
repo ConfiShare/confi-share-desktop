@@ -371,7 +371,7 @@ Do not submit for review until all of the following are true:
 
 ## 9. App Store Connect release checklist
 
-In App Store Connect > Apps > your confirmed macOS app, complete the 1.0.2 version page with a factual description of ConfiShare's sign-in, import, protected document viewing, offline authorization window, and document formats. Enter keywords based on the actual product. Do not advertise capture prevention as absolute or promise `.doc`/`.ppt` support in the MAS build. Set Support URL to a working support page and Privacy Policy URL to the actual policy; `https://confishare.io/policy/` is linked in the app but must be checked by the owner before use in the listing.
+In App Store Connect > Apps > your confirmed macOS app, complete the 1.0.2 version page with a factual description of ConfiShare's sign-in, import, protected document viewing, offline authorization window, and document formats. Enter keywords based on the actual product. Do not advertise capture prevention as absolute or promise `.doc`/`.ppt` support in the MAS build. The verified Support URL is `https://confishare.io/contact`; the verified Privacy Policy URL is `https://confishare.io/privacy-policy`. The sign-up and Settings links were corrected to match the live privacy and terms pages after build `1.0.100002` was uploaded, so select a newer build when available.
 
 Under the macOS version's screenshots, capture the running Mac build. Apple currently accepts 16:10 Mac images of 1280×800, 1440×900, 2560×1600, or 2880×1800 pixels, one to ten JPEG/PNG screenshots without transparency. Show the sign-in, document list, protected viewer, and an honest format/permission state using non-sensitive sample documents.
 

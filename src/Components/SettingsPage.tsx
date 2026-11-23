@@ -104,14 +104,14 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               title="Privacy Policy"
               description="Learn how we handle your data and protect your privacy."
               onClick={() =>
-                window.open("https://confishare.io/terms-of-service/", "_blank")
+                window.open("https://confishare.io/privacy-policy", "_blank")
               }
             />
             <SettingsRow
               title="Terms of Service"
               description="Read the terms that govern your use of Confishare"
               onClick={() =>
-                window.open("https://confishare.io/policy/", "_blank")
+                window.open("https://confishare.io/terms-of-service", "_blank")
               }
             />
           </SettingsSection>
