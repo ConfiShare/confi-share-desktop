@@ -26,6 +26,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [documents, setDocuments] = useState<ConfiDocument[]>([]);
+  const [documentsLoaded, setDocumentsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [modal, setModal] = useState<ModalState>({ type: null });
   const [activeView, setActiveView] = useState<ActiveView>('home');
@@ -39,7 +40,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isInitialized.current = true;
 
     async function loadDocs() {
-      if (window.drmApi) {
+      try {
+        if (!window.drmApi) return;
         const storedDocs = await window.drmApi.loadList();
         // Reset transient fields
         const hydrated = storedDocs.map((d) => {
@@ -53,6 +55,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } as ConfiDocument;
         });
         setDocuments(hydrated);
+        setDocumentsLoaded(true);
+      } catch (error) {
+        console.error('Failed to load documents:', error);
       }
     }
     loadDocs();
@@ -60,17 +65,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Save documents to disk whenever they change
   useEffect(() => {
-    if (window.drmApi && documents.length > 0) {
+    if (window.drmApi && documentsLoaded) {
       // We don't save fileUrl or fileObject to the json
       const toSave = documents.map((doc) => {
-        const serializableDoc = { ...doc };
+        const serializableDoc: Partial<ConfiDocument> = { ...doc };
         delete serializableDoc.fileUrl;
         delete serializableDoc.fileObject;
+        // A protected document's real access code must never enter documents.json.
+        if (serializableDoc.cdcContainer) delete serializableDoc.accessCode;
         return serializableDoc;
       });
-      window.drmApi.saveList(toSave);
+      window.drmApi.saveList(toSave).catch((error) => console.error('Failed to save documents:', error));
     }
-  }, [documents]);
+  }, [documents, documentsLoaded]);
 
   const filteredDocuments = searchQuery.trim()
     ? documents.filter((d) =>
@@ -102,6 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         finalDoc.localPath = localPath;
       } catch (e) {
         console.error('Failed to save file locally:', e);
+        throw e;
       }
     }
 
@@ -114,15 +122,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const removeDocument = useCallback(async (id: string) => {
     setDocuments((prev) => {
       const newList = prev.filter((d) => d.id !== id);
-      if (window.drmApi) {
-        const toSave = newList.map((doc) => {
-          const serializableDoc = { ...doc };
-          delete serializableDoc.fileUrl;
-          delete serializableDoc.fileObject;
-          return serializableDoc;
-        });
-        window.drmApi.saveList(toSave);
-      }
       return newList;
     });
     // Optional: Remove local file from disk too via IPC

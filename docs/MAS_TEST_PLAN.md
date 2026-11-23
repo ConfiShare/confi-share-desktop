@@ -61,8 +61,10 @@ Prepare:
   - Expected: clear network/offline error, not a hang or crash.
 - Sign in, quit the app, relaunch while offline.
   - Expected: the saved session is available through `safeStorage`/Keychain.
+- Unlock a protected document, quit, then inspect `documents.json` in the app container.
+  - Expected: the real access code is absent from the plaintext document list. The encrypted value may remain in `secure_metadata.json` for offline authorization.
 - Inspect the app container:
-  - `~/Library/Containers/com.confishare.desktop/Data/Library/Application Support/ConfiShare/` (path may vary by Electron userData naming).
+  - `~/Library/Containers/io.confishare.mac/Data/Library/Application Support/ConfiShare/` (path may vary by Electron userData naming).
   - Expected: no plaintext password/token in `secure_metadata.json`; encrypted values only.
 
 ## 3. File import
@@ -144,6 +146,8 @@ For each imported document, verify the correct viewer:
 - Confirm the app writes only inside its container, except user-selected reads.
 - Confirm no unhandled sandbox-denial logs cause a crash.
 - Confirm helper processes exist and the app functions with sandbox inheritance.
+- Try a native screenshot and a ScreenCaptureKit-based capture while a document is open.
+  - Record the actual outcome. Electron cannot guarantee capture blocking for newer macOS capture apps.
 
 ## 9. Package validation
 
@@ -161,7 +165,7 @@ Expected:
 - app identity is Mac App Distribution/Apple Distribution
 - sandbox, network client, user-selected file, and JIT entitlements are present
 - `get-task-allow`, `disable-library-validation`, and `allow-unsigned-executable-memory` are absent
-- embedded provisioning profile exists and matches `com.confishare.desktop`
+- embedded provisioning profile exists and matches `io.confishare.mac`
 - no LibreOffice binary is bundled
 - `.pkg` is signed by Mac Installer Distribution
 - `.pkg` payload contains the app and embedded profile
