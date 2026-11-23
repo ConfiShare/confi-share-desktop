@@ -12,7 +12,7 @@ The repository now has a separate Mac App Store build path:
 - `.github/workflows/mas.yml` is a manual build-and-validate workflow with a separate upload switch.
 - `docs/MAS_TEST_PLAN.md` is the required macOS test checklist.
 
-The first macOS GitHub Actions run [45201665607](https://github.com/ConfiShare/confi-share-desktop/actions/runs/45201665607) built the universal `.app` and signed `.pkg` successfully. Its automated validation passed architecture, app/helper signatures, sandbox entitlements, bundle identity, provisioning profile, and package signature. The app has **not** yet been interactively tested on a Mac, uploaded to App Store Connect, or submitted for review.
+The first macOS GitHub Actions run [45201665607](https://github.com/ConfiShare/confi-share-desktop/actions/runs/45201665607) built the universal `.app` and signed `.pkg` successfully. Its automated validation passed architecture, app/helper signatures, sandbox entitlements, bundle identity, provisioning profile, and package signature. The second run [45214135585](https://github.com/ConfiShare/confi-share-desktop/actions/runs/45214135585) produced build `1.0.100002` for version `1.0.2`, passed the same checks, and Apple `altool` reported validation with no errors and upload success with zero warnings. Apple processing and interactive TestFlight testing remain outstanding. The app has **not** been submitted for App Review.
 
 ### Source audit
 
@@ -385,7 +385,7 @@ On the version page, choose the processed build with the matching bundle ID, ver
 
 The signed universal `.pkg` passed automated validation on a GitHub macOS runner. The remaining checks are:
 
-- Upload the package to App Store Connect and confirm Apple processes it without validation errors.
+- Confirm Apple finishes processing build `1.0.100002` in App Store Connect without validation errors.
 - Install the processed build through TestFlight on a Mac and complete `docs/MAS_TEST_PLAN.md`, including sign-in, file import, offline access, and Keychain persistence.
 - Complete the App Store Connect listing and review information, then submit only after the release is approved.
 
