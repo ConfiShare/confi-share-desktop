@@ -15,7 +15,7 @@
 //   npm run build:mas:dev
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "com.confishare.desktop",
+  "appId": "io.confishare.mac",
   "asar": true,
   "productName": "ConfiShare",
   "directories": {
@@ -44,8 +44,8 @@
     "artifactName": "${productName}-Mac-AppStore-${version}-${arch}.${ext}"
   },
   "mas": {
-    "appId": "com.confishare.desktop",
-    "helperBundleId": "com.confishare.desktop.helper",
+    "appId": "io.confishare.mac",
+    "helperBundleId": "io.confishare.mac.helper",
     "type": "distribution",
     "hardenedRuntime": false,
     "notarize": false,
@@ -55,8 +55,8 @@
     "artifactName": "${productName}-Mac-AppStore-${version}-${arch}.${ext}"
   },
   "masDev": {
-    "appId": "com.confishare.desktop",
-    "helperBundleId": "com.confishare.desktop.helper",
+    "appId": "io.confishare.mac",
+    "helperBundleId": "io.confishare.mac.helper",
     "type": "development",
     "hardenedRuntime": false,
     "notarize": false,

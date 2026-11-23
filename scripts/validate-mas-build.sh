@@ -76,7 +76,8 @@ if grep -Eq '^Authority=(3rd Party Mac Developer Application|Apple Distribution)
 else
   fail "app is not signed with a Mac App Distribution/Apple Distribution identity"
 fi
-if grep -Eq '^TeamIdentifier=' "$TMP/app-signature.txt"; then
+SIGNING_TEAM="$(sed -n 's/^TeamIdentifier=//p' "$TMP/app-signature.txt" | head -n 1)"
+if [ -n "$SIGNING_TEAM" ]; then
   pass "app signature contains a TeamIdentifier"
 else
   fail "app signature is missing TeamIdentifier"
@@ -134,13 +135,17 @@ elif /usr/libexec/PlistBuddy -c "Print :com.apple.security.files.user-selected.r
 else
   fail "no user-selected file entitlement is enabled"
 fi
-check_value "com.apple.application-identifier" "com.confishare.desktop"
+check_value "com.apple.application-identifier" "io.confishare.mac"
 TEAM_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.team-identifier' "$TMP/app-entitlements.plist" 2>/dev/null || true)"
 if [ -n "$TEAM_IDENTIFIER" ]; then
   pass "entitlement com.apple.developer.team-identifier=$TEAM_IDENTIFIER"
+  if [ -n "$SIGNING_TEAM" ] && [ "$TEAM_IDENTIFIER" != "$SIGNING_TEAM" ]; then
+    fail "app entitlement team $TEAM_IDENTIFIER differs from signature team $SIGNING_TEAM"
+  fi
 else
   fail "entitlement com.apple.developer.team-identifier is missing"
 fi
+check_value "com.apple.security.application-groups" "$SIGNING_TEAM.io.confishare.mac"
 check_absent "com.apple.security.get-task-allow"
 check_absent "com.apple.security.cs.disable-library-validation"
 check_absent "com.apple.security.cs.allow-unsigned-executable-memory"
@@ -185,9 +190,13 @@ if [ -f "$PROFILE" ]; then
   if security cms -D -i "$PROFILE" > "$TMP/profile.plist" 2>/dev/null; then
     PROFILE_APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$TMP/profile.plist" 2>/dev/null || true)"
     case "$PROFILE_APP_ID" in
-      *com.confishare.desktop*) pass "profile application identifier: $PROFILE_APP_ID" ;;
-      *) fail "profile application identifier does not include com.confishare.desktop (value: ${PROFILE_APP_ID:-missing})" ;;
+      *.io.confishare.mac) pass "profile application identifier: $PROFILE_APP_ID" ;;
+      *) fail "profile application identifier does not end in .io.confishare.mac (value: ${PROFILE_APP_ID:-missing})" ;;
     esac
+    PROFILE_TEAM="${PROFILE_APP_ID%.io.confishare.mac}"
+    if [ -n "$SIGNING_TEAM" ] && [ "$PROFILE_TEAM" != "$SIGNING_TEAM" ]; then
+      fail "provisioning profile team $PROFILE_TEAM differs from signature team $SIGNING_TEAM"
+    fi
     PROFILE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$TMP/profile.plist" 2>/dev/null || true)"
     if [ -n "$PROFILE_EXPIRATION" ]; then
       pass "profile expiration: $PROFILE_EXPIRATION"
@@ -210,20 +219,33 @@ echo
 
 echo "== Bundle metadata =="
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null || true)"
+ELECTRON_TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :ElectronTeamID' "$APP/Contents/Info.plist" 2>/dev/null || true)"
 BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || true)"
 BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist" 2>/dev/null || true)"
 echo "CFBundleIdentifier: ${BUNDLE_ID:-missing}"
 echo "CFBundleShortVersionString: ${BUNDLE_VERSION:-missing}"
 echo "CFBundleVersion: ${BUILD_VERSION:-missing}"
-if [ "$BUNDLE_ID" = "com.confishare.desktop" ]; then
-  pass "bundle identifier is com.confishare.desktop"
+if [ "$BUNDLE_ID" = "io.confishare.mac" ]; then
+  pass "bundle identifier is io.confishare.mac"
 else
   fail "unexpected bundle identifier: ${BUNDLE_ID:-missing}"
+fi
+if [ -n "$SIGNING_TEAM" ] && [ "$ELECTRON_TEAM_ID" = "$SIGNING_TEAM" ]; then
+  pass "ElectronTeamID matches signing team"
+else
+  fail "ElectronTeamID ${ELECTRON_TEAM_ID:-missing} does not match signing team ${SIGNING_TEAM:-missing}"
 fi
 if [ -n "$BUNDLE_VERSION" ]; then
   pass "bundle version is set"
 else
   fail "bundle version is missing"
+fi
+if [ -n "${MAS_EXPECTED_BUILD_VERSION:-}" ]; then
+  if [ "$BUILD_VERSION" = "$MAS_EXPECTED_BUILD_VERSION" ]; then
+    pass "CFBundleVersion matches CI build number $MAS_EXPECTED_BUILD_VERSION"
+  else
+    fail "CFBundleVersion $BUILD_VERSION does not match expected $MAS_EXPECTED_BUILD_VERSION"
+  fi
 fi
 echo
 

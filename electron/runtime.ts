@@ -11,7 +11,7 @@ export const MAS_OFFICE_CONVERSION_UNAVAILABLE = 'MAS_OFFICE_CONVERSION_UNAVAILA
 export const MAS_OFFICE_CONVERSION_MESSAGE =
   'Office-to-PDF conversion is unavailable in the Mac App Store build. ' +
   'This build previews DOCX, XLSX, PPTX, ODT, ODS, ODP, CSV, TSV, TXT, RTF, PDF, and image files in-app. ' +
-  'Legacy binary Office formats (.doc, .xls, .ppt) are not supported in the App Store build.';
+  'Legacy .doc and .ppt files are not supported in the App Store build; .xls uses the built-in preview.';
 
 export function createMasOfficeConversionError(): Error {
   return new Error(`${MAS_OFFICE_CONVERSION_UNAVAILABLE}: ${MAS_OFFICE_CONVERSION_MESSAGE}`);

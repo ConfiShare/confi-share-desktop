@@ -75,8 +75,8 @@ if (!fs.existsSync(profilePath)) {
   fail(
     `Missing provisioning profile: ${path.relative(root, profilePath)}\n` +
       (isDev
-        ? 'Create a Mac App Development profile for com.confishare.desktop and save it as build/embedded.dev.provisionprofile.'
-        : 'Create a Mac App Store distribution profile for com.confishare.desktop and save it as build/embedded.provisionprofile, or set MAS_PROVISIONING_PROFILE to its path.'),
+        ? 'Create a Mac App Development profile for io.confishare.mac and save it as build/embedded.dev.provisionprofile.'
+        : 'Create a Mac App Store distribution profile for io.confishare.mac and save it as build/embedded.provisionprofile, or set MAS_PROVISIONING_PROFILE to its path.'),
   );
 }
 ok(`Found provisioning profile ${path.relative(root, profilePath)}`);
@@ -87,10 +87,11 @@ try {
   const profileXml = run('security', ['cms', '-D', '-i', profilePath]);
   fs.writeFileSync(profilePlistPath, profileXml);
 
-  if (!profileXml.includes('com.confishare.desktop')) {
-    fail('The provisioning profile does not contain com.confishare.desktop.');
+  const profileAppId = run('/usr/libexec/PlistBuddy', ['-c', 'Print :Entitlements:com.apple.application-identifier', profilePlistPath]).trim();
+  if (!profileAppId.endsWith('.io.confishare.mac')) {
+    fail(`The provisioning profile App ID does not match io.confishare.mac: ${profileAppId}`);
   }
-  ok('Provisioning profile is for com.confishare.desktop.');
+  ok(`Provisioning profile App ID: ${profileAppId}`);
 
   try {
     const expiration = run('/usr/libexec/PlistBuddy', ['-c', 'Print :ExpirationDate', profilePlistPath]).trim();
@@ -103,9 +104,14 @@ try {
     warn('Could not read the provisioning profile expiration date.');
   }
 
-  if (profileXml.includes('<key>get-task-allow</key>') && profileXml.includes('<true/>') && !isDev) {
-    warn('The distribution profile appears to include get-task-allow=true. Verify you selected a Mac App Store distribution profile.');
+  let getTaskAllow = 'false';
+  try {
+    getTaskAllow = run('/usr/libexec/PlistBuddy', ['-c', 'Print :Entitlements:get-task-allow', profilePlistPath]).trim();
+  } catch {
+    // A missing key is equivalent to false for a distribution profile.
   }
+  if (!isDev && getTaskAllow === 'true') fail('Distribution profile permits debugging; select a Mac App Store Connect profile.');
+  if (isDev && getTaskAllow !== 'true') warn('Development profile does not permit debugging; verify its type.');
 } finally {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 }
@@ -123,10 +129,12 @@ if (usesImportedP12) {
       if (!process.env.CSC_INSTALLER_KEY_PASSWORD) {
         warn('CSC_INSTALLER_KEY_PASSWORD is not set. This is only okay if the installer key has no password.');
       }
-    } else if (!process.env.CSC_NAME) {
-      warn(
-        'CSC_INSTALLER_LINK is not set. The Mac Installer Distribution identity must already be in the keychain or included in CSC_LINK; otherwise .pkg signing will fail.',
-      );
+    } else {
+      const identities = run('security', ['find-identity', '-v']);
+      if (!identities.includes('3rd Party Mac Developer Installer') && !identities.includes('Mac Installer Distribution')) {
+        fail('No Mac Installer Distribution identity was supplied or found in the keychain.');
+      }
+      ok('Found Mac Installer Distribution identity in the keychain.');
     }
   }
 } else {

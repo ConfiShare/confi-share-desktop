@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-mas:
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Check out Git repository
@@ -38,14 +38,11 @@ jobs:
           [ -n "$MAS_CERT_P12" ] || { echo "::error::Missing secret MAS_CERTIFICATE_P12_BASE64"; MISSING=1; }
           [ -n "$MAS_CERT_PW" ] || { echo "::error::Missing secret MAS_CERTIFICATE_PASSWORD"; MISSING=1; }
           [ -n "$MAS_PROFILE" ] || { echo "::error::Missing secret MAS_PROVISIONING_PROFILE_BASE64"; MISSING=1; }
+          [ -n "$MAS_INSTALLER_CERT_P12" ] || { echo "::error::Missing secret MAS_INSTALLER_CERTIFICATE_P12_BASE64"; MISSING=1; }
+          [ -n "$MAS_INSTALLER_CERT_PW" ] || { echo "::error::Missing secret MAS_INSTALLER_CERTIFICATE_PASSWORD"; MISSING=1; }
           if [ "$MISSING" -eq 1 ]; then
-            echo "::error::Create the Mac App Distribution .p12, the Mac App Store provisioning profile, and optionally a separate Mac Installer Distribution .p12. See docs/MAC_APP_STORE.md."
+            echo "::error::Provide separate Mac App Distribution and Mac Installer Distribution identities plus the Mac App Store provisioning profile. See docs/MAC_APP_STORE.md."
             exit 1
-          fi
-          if [ -z "$MAS_INSTALLER_CERT_P12" ]; then
-            echo "::warning::MAS_INSTALLER_CERTIFICATE_P12_BASE64 is not set. The installer identity must be in the keychain or combined into MAS_CERTIFICATE_P12_BASE64."
-          elif [ -z "$MAS_INSTALLER_CERT_PW" ]; then
-            echo "::warning::MAS_INSTALLER_CERTIFICATE_PASSWORD is empty. This is only okay if the installer key has no password."
           fi
 
       - name: Write provisioning profile
@@ -59,37 +56,32 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :Name' /tmp/mas-profile.plist || true
           /usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' /tmp/mas-profile.plist || true
 
-      - name: Configure separate installer identity
-        env:
-          MAS_INSTALLER_CERT_P12: ${{ secrets.MAS_INSTALLER_CERTIFICATE_P12_BASE64 }}
-          MAS_INSTALLER_CERT_PW: ${{ secrets.MAS_INSTALLER_CERTIFICATE_PASSWORD }}
-        run: |
-          if [ -n "$MAS_INSTALLER_CERT_P12" ]; then
-            {
-              echo "CSC_INSTALLER_LINK=$MAS_INSTALLER_CERT_P12"
-              echo "CSC_INSTALLER_KEY_PASSWORD=$MAS_INSTALLER_CERT_PW"
-            } >> "$GITHUB_ENV"
-          fi
-
       - name: Install dependencies
-        run: |
-          npm ci
-          npm install --no-save @rollup/rollup-darwin-arm64@4.57.1 lightningcss-darwin-arm64@1.30.2 @tailwindcss/oxide-darwin-arm64@4.1.18
+        run: npm ci
 
       - name: Preflight MAS configuration
         env:
           CSC_LINK: ${{ secrets.MAS_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAS_CERTIFICATE_PASSWORD }}
+          CSC_INSTALLER_LINK: ${{ secrets.MAS_INSTALLER_CERTIFICATE_P12_BASE64 }}
+          CSC_INSTALLER_KEY_PASSWORD: ${{ secrets.MAS_INSTALLER_CERTIFICATE_PASSWORD }}
         run: npm run mas:preflight
 
       - name: Build signed MAS .pkg
         env:
           CSC_LINK: ${{ secrets.MAS_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAS_CERTIFICATE_PASSWORD }}
-        run: npm run build:mas
+          CSC_INSTALLER_LINK: ${{ secrets.MAS_INSTALLER_CERTIFICATE_P12_BASE64 }}
+          CSC_INSTALLER_KEY_PASSWORD: ${{ secrets.MAS_INSTALLER_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER="1.0.$((100000 + GITHUB_RUN_NUMBER))"
+          echo "Building CFBundleVersion=$BUILD_NUMBER"
+          npm run build:mas -- "--config.mas.bundleVersion=$BUILD_NUMBER"
 
       - name: Validate signing, sandbox, profile, and package
-        run: npm run validate:mas
+        run: |
+          MAS_EXPECTED_BUILD_VERSION="1.0.$((100000 + GITHUB_RUN_NUMBER))" npm run validate:mas
 
       - name: Generate SHA-256 checksum
         run: |
@@ -115,30 +107,27 @@ jobs:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
           ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
-          set -e
+          set -euo pipefail
           PKG=$(find release-mas -path '*/mas-universal/*.pkg' -print -quit)
           [ -n "$PKG" ] || { echo "::error::Signed .pkg not found"; exit 1; }
-          echo "Uploading $PKG"
-
-          HAS_ASC_KEY=0
-          [ -n "$ASC_API_KEY_ID" ] && [ -n "$ASC_API_ISSUER_ID" ] && [ -n "$ASC_API_KEY_P8_BASE64" ] && HAS_ASC_KEY=1
-
-          if [ "$HAS_ASC_KEY" -eq 1 ]; then
-            KEY_DIR="$HOME/.appstoreconnect/private_keys"
-            mkdir -p "$KEY_DIR"
-            node -e "require('fs').writeFileSync(process.env.HOME + '/.appstoreconnect/private_keys/AuthKey_' + process.env.ASC_API_KEY_ID + '.p8', Buffer.from(process.env.ASC_API_KEY_P8_BASE64, 'base64'))"
-            chmod 600 "$KEY_DIR/AuthKey_$ASC_API_KEY_ID.p8"
-            trap 'rm -f "$KEY_DIR/AuthKey_$ASC_API_KEY_ID.p8"' EXIT
-            xcrun altool --upload-app -f "$PKG" -t macos --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID" --output-format normal
-          elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
-            xcrun altool --upload-app -f "$PKG" -t macos -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD" --output-format normal
-          else
-            echo "::error::Configure either ASC_API_KEY_ID + ASC_API_ISSUER_ID + ASC_API_KEY_P8_BASE64, or APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD."
+          [ -n "$ASC_API_KEY_ID" ] && [ -n "$ASC_API_ISSUER_ID" ] && [ -n "$ASC_API_KEY_P8_BASE64" ] || {
+            echo "::error::Set ASC_API_KEY_ID, ASC_API_ISSUER_ID, and ASC_API_KEY_P8_BASE64 for upload."
             exit 1
-          fi
+          }
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          node -e "require('fs').writeFileSync(process.env.HOME + '/.appstoreconnect/private_keys/AuthKey_' + process.env.ASC_API_KEY_ID + '.p8', Buffer.from(process.env.ASC_API_KEY_P8_BASE64, 'base64'))"
+          chmod 600 "$KEY_DIR/AuthKey_$ASC_API_KEY_ID.p8"
+          trap 'rm -f "$KEY_DIR/AuthKey_$ASC_API_KEY_ID.p8"' EXIT
+          xcrun altool --validate-app -f "$PKG" -t macos --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"
+          xcrun altool --upload-app -f "$PKG" -t macos --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"
+
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          rm -f build/embedded.provisionprofile
+          rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_"*.p8
 
       - name: Reminder
         run: |
