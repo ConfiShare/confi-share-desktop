@@ -12,7 +12,7 @@ The repository now has a separate Mac App Store build path:
 - `.github/workflows/mas.yml` is a manual build-and-validate workflow with a separate upload switch.
 - `docs/MAS_TEST_PLAN.md` is the required macOS test checklist.
 
-This has **not** been built, signed, or tested on macOS from this Windows workspace. It also has **not** been uploaded to App Store Connect or submitted for review. Those steps require your Apple account, certificates, provisioning profiles, and a Mac (or the macOS GitHub runner).
+The first macOS GitHub Actions run [45201665607](https://github.com/ConfiShare/confi-share-desktop/actions/runs/45201665607) built the universal `.app` and signed `.pkg` successfully. Its automated validation passed architecture, app/helper signatures, sandbox entitlements, bundle identity, provisioning profile, and package signature. The app has **not** yet been interactively tested on a Mac, uploaded to App Store Connect, or submitted for review.
 
 ### Source audit
 
